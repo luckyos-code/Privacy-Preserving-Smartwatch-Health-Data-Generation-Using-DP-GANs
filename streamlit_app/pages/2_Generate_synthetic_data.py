@@ -1,3 +1,5 @@
+import io
+import zipfile
 from enum import Enum
 
 import keras
@@ -11,9 +13,9 @@ from streamlit_pandas_profiling import st_profile_report
 
 
 class StressType(Enum):
+    BOTH = "Both"
     NON_STRESS = "Non-Stress"
     STRESS = "Stress"
-    BOTH = "Both"
 
 
 MODEL_DICT = {
@@ -128,13 +130,14 @@ def generate_synthetic_data(
     return df
 
 
-def display_dataframe(df: pd.DataFrame) -> None:
+def display_dataframe(df: pd.DataFrame, show_profile: bool = True) -> None:
     st.dataframe(df)
     # For each signal in the synthetic data
     st.line_chart(df, height=200)
 
-    pr = ProfileReport(df, explorative=True)
-    st_profile_report(pr)
+    if show_profile:
+        pr = ProfileReport(df, explorative=True)
+        st_profile_report(pr)
 
 
 def download_dataframe(df: pd.DataFrame, model_name: str) -> None:
@@ -147,6 +150,26 @@ def download_dataframe(df: pd.DataFrame, model_name: str) -> None:
         key="down-load-csv",
     )
 
+def download_dataframe_zipped(subjs: np.ndarray, model_name: str) -> None:
+    subjs_csv = [(f"g{df['sid'].iloc[0]}.csv", convert_df(df)) for df in subjs]
+
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED, False) as zip_file:
+        for file_name, data in subjs_csv:
+            zip_file.writestr(file_name, data.decode("utf-8"))  # Add each CSV to the zip
+
+    zip_buffer.seek(0)
+    zip_data = zip_buffer.getvalue()
+
+    st.download_button(
+        "Download synthetic data as zipped CSVs",
+        zip_data,
+        file_name=f"{len(subjs_csv)}_subj_synthetic_{model_name}.zip",
+        mime="application/zip",
+        key="down-load-zip",
+    )
+
 
 def run():
     st.subheader("Generate synthetic data from a trained model")
@@ -156,35 +179,62 @@ def run():
             "Select the model", ["cGAN", "DP-cGAN-e-0.1", "DP-cGAN-e-1", "DP-cGAN-e-10"]
         )
         model_name = MODEL_DICT[model_selection]
+
         latent_dim = st.number_input(
             "Length of windows in seconds", min_value=0, value=60
         )
         num_syn_samples = st.number_input(
-            "Number of synthetic windows to generate", min_value=0, value=10
+            "Number of synthetic windows to generate", min_value=0, value=36
         )
         stress_type_str = st.selectbox(
             "Select type of data to generate", [e.value for e in StressType]
+        )
+        num_gen_rounds = st.number_input(
+            "Select number of generation rounds (i.e. subjects)", min_value=1, value=1
         )
 
         # Map string back to StressType Enum
         stress_type = StressType(stress_type_str)
 
     if st.button("Generate samples"):
-        try:
-            model = load_model(model_name)
-            st.success(
-                "The model was properly loaded and is now ready to generate synthetic samples!"
-            )
-            with st.spinner("Generating samples... This might take time."):
-                df = generate_synthetic_data(
-                    model, num_syn_samples, latent_dim, stress_type
+        if num_gen_rounds == 1:
+            try:
+                model = load_model(model_name)
+                st.success(
+                    "The model was properly loaded and is now ready to generate synthetic samples!"
                 )
+                with st.spinner("Generating samples... This might take time."):
+                    df = generate_synthetic_data(
+                        model, num_syn_samples, latent_dim, stress_type
+                    )
 
-            display_dataframe(df)
-            st.success("Synthetic data has been generated successfully!")
-            download_dataframe(df, model_name)
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
+                display_dataframe(df)
+                st.success("Synthetic data has been generated successfully!")
+                download_dataframe(df, model_selection)
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+        else: # generae multiple csvs at once
+            try:
+                model = load_model(model_name)
+                st.success(
+                    "The model was properly loaded and is now ready to generate synthetic samples!"
+                )
+                with st.spinner("Generating samples... This might take time."):
+                    subjs = []
+                    for i in range(1, num_gen_rounds+1):
+                        sid = 1000 + i # create ids starting at 1000
+                        df = generate_synthetic_data(
+                            model, num_syn_samples, latent_dim, stress_type
+                        )
+                        # add subject id as column
+                        df.insert(0, column="sid", value=np.full(shape=len(df.index), fill_value=sid))
+                        subjs.append(df)
+                
+                [display_dataframe(df.drop(columns=["sid"]), show_profile=False) for df in subjs[:3]]
+                st.success("Synthetic data has been generated successfully!")
+                download_dataframe_zipped(subjs, model_selection)
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
 
 
 if __name__ == "__main__":
