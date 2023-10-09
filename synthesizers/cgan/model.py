@@ -3,7 +3,6 @@ from sklearn.neighbors import KNeighborsClassifier
 from tensorflow.keras.layers import (Dense, Dropout, LayerNormalization,
                                      MultiHeadAttention)
 
-import wandb
 from metric.visualization import plot_signal_distributions, visualization
 from synthesizers.utils.training import (build_classifier_dataset,
                                          generate_and_plot_data)
@@ -163,12 +162,12 @@ class ConditionalGAN(tf.keras.Model):
         latent_dim,
         num_features,
         activation_function,
-        classes=2,
+        num_classes=3,
     ):
         # connect latent_space with a neuronal Net
         in_label = tf.keras.layers.Input(shape=(1,))
         # embedding for categorical input
-        layer = tf.keras.layers.Embedding(classes, 2)(in_label)
+        layer = tf.keras.layers.Embedding(num_classes, num_classes)(in_label)
 
         layer = tf.keras.layers.Dense(seq_length)(layer)
 
@@ -211,7 +210,7 @@ class ConditionalGAN(tf.keras.Model):
         filters,
         activation_function,
         kernel_sizes=None,
-        classes=2,
+        num_classes=3,
         architecture="fcn",
         num_transformer_layers=2,
         num_heads=4,
@@ -225,7 +224,7 @@ class ConditionalGAN(tf.keras.Model):
         # connect label input with a neuronal Net
         in_label = tf.keras.layers.Input(shape=(1,))
         # embedding for categorical input
-        layer = tf.keras.layers.Embedding(classes, 2)(in_label)
+        layer = tf.keras.layers.Embedding(num_classes, num_classes)(in_label)
 
         layer = tf.keras.layers.Dense(seq_length)(layer)
 
@@ -353,14 +352,18 @@ class ConditionalGAN(tf.keras.Model):
 class GANMonitor(tf.keras.callbacks.Callback):
     def __init__(
         self,
-        trainmos,
-        trainnomos,
-        testmos,
-        testnomos,
-        randomTrainMos,
-        randomTrainNoMos,
-        randomTestMos,
-        randomTestNoMos,
+        train_stress,
+        train_amuse,
+        train_base,
+        test_stress,
+        test_amuse,
+        test_base,
+        rand_train_stress,
+        rand_train_amuse,
+        rand_train_base,
+        rand_test_stress,
+        rand_test_amuse,
+        rand_test_base,
         num_features,
         # noise_multiplier,
         batch_size,
@@ -369,14 +372,18 @@ class GANMonitor(tf.keras.callbacks.Callback):
         num_seq=1,
         seq_length=18,
     ):
-        self.trainmos = trainmos
-        self.trainnomos = trainnomos
-        self.testmos = testmos
-        self.testnomos = testnomos
-        self.randomTrainMos = randomTrainMos
-        self.randomTrainNoMos = randomTrainNoMos
-        self.randomTestMos = randomTestMos
-        self.randomTestNoMos = randomTestNoMos
+        self.train_stress = train_stress
+        self.train_amuse = train_amuse
+        self.train_base = train_base
+        self.test_stress = test_stress
+        self.test_amuse = test_amuse
+        self.test_base = test_base
+        self.rand_train_stress = rand_train_stress
+        self.rand_train_amuse = rand_train_amuse
+        self.rand_train_base = rand_train_base
+        self.rand_test_stress = rand_test_stress
+        self.rand_test_amuse = rand_test_amuse
+        self.rand_test_base = rand_test_base
         self.seq_length = seq_length
         self.save_path = save_path
         self.scorelist = []
@@ -388,34 +395,53 @@ class GANMonitor(tf.keras.callbacks.Callback):
         self.dp = dp
 
     def on_epoch_end(self, epoch, logs=None):
-        label_mos = tf.ones((self.randomTrainNoMos.shape[0], 1))
-        label_nomos = tf.zeros((self.randomTrainNoMos.shape[0], 1))
+        label_stress = 1
+        label_amuse = 2
+        label_base = 0
 
-        syn_train_mos = self.model.generator(
-            [self.randomTrainMos, label_mos[: self.randomTrainMos.shape[0]]]
+        syn_train_stress = self.model.generator(
+            [self.rand_train_stress, tf.fill((self.rand_train_stress.shape[0], 1), label_stress)]
         )
-        syn_train_no_mos = self.model.generator([self.randomTrainNoMos, label_nomos])
-        syn_test_mos = self.model.generator(
-            [self.randomTestMos, label_mos[: self.randomTestMos.shape[0]]]
+        syn_train_amuse = self.model.generator(
+            [self.rand_train_amuse, tf.fill((self.rand_train_amuse.shape[0], 1), label_amuse)]
         )
-        syn_test_no_mos = self.model.generator(
-            [self.randomTestNoMos, label_nomos[: self.randomTestNoMos.shape[0]]]
+        syn_train_base = self.model.generator(
+            [self.rand_train_base, tf.fill((self.rand_train_base.shape[0], 1), label_base)]
+        )
+        
+        syn_test_stress = self.model.generator(
+            [self.rand_test_stress, tf.fill((self.rand_test_stress.shape[0], 1), label_stress)]
+        )
+        syn_test_amuse = self.model.generator(
+            [self.rand_test_amuse, tf.fill((self.rand_test_amuse.shape[0], 1), label_amuse)]
+        )        
+        syn_test_base = self.model.generator(
+            [self.rand_test_base, tf.fill((self.rand_test_base.shape[0], 1), label_base)]
         )
 
-        label_mos = tf.ones((self.randomTrainMos.shape[0], 1))
-        label_nomos = tf.zeros((self.randomTrainMos.shape[0], 1))
-        syn_stress = self.model.generator([self.randomTrainMos, label_mos])
-        syn_no_stress = self.model.generator([self.randomTrainMos, label_nomos])
+        syn_stress = self.model.generator(
+            [self.rand_train_base, tf.fill((self.rand_train_base.shape[0], 1), label_stress)]
+        )
+        syn_amuse = self.model.generator(
+            [self.rand_train_base, tf.fill((self.rand_train_base.shape[0], 1), label_amuse)]
+        )
+        syn_base = self.model.generator(
+            [self.rand_train_base, tf.fill((self.rand_train_base.shape[0], 1), label_base)]
+        )
 
         nn_train, nn_label, nn_test, nn_label_test = build_classifier_dataset(
-            syn_train_mos,
-            syn_train_no_mos,
-            self.trainmos,
-            self.trainnomos,
-            syn_test_mos,
-            syn_test_no_mos,
-            self.testmos,
-            self.testnomos,
+            syn_train_stress,
+            syn_train_amuse,
+            syn_train_base,
+            self.train_stress,
+            self.train_amuse,
+            self.train_base,
+            syn_test_stress,
+            syn_test_amuse,
+            syn_test_base,
+            self.test_stress,
+            self.test_amuse,
+            self.test_base,
             seq_length=self.seq_length,
             num_features=self.num_features,
         )
@@ -425,8 +451,6 @@ class GANMonitor(tf.keras.callbacks.Callback):
         neigh.fit(nn_train, nn_label)
         c2st_score = neigh.score(nn_test, nn_label_test)
         self.scorelist.append(c2st_score)
-
-        wandb.log({"c2st_score": c2st_score})
 
         if c2st_score < 0.75 and self.dp is False:
             print(f"c2st_score: {c2st_score} at {epoch} ")
@@ -449,33 +473,27 @@ class GANMonitor(tf.keras.callbacks.Callback):
             ISTOIG = {0: "BVP", 1: "EDA", 2: "ACC_x", 3: "ACC_y", 4: "ACC_z", 5: "TEMP"}
 
             sig_dist = plot_signal_distributions(
-                self.trainmos, syn_stress, SIGTOI, ISTOIG
+                self.train_stress, syn_stress, SIGTOI, ISTOIG
             )
-
-            wandb.log({"distribution": sig_dist})
 
             plot_pca_stress = visualization(
-                self.trainmos[: len(syn_stress)], syn_stress, "pca"
+                self.train_stress[: len(syn_stress)], syn_stress, "pca"
             )
-
-            wandb.log({"pca_stress": wandb.Image(plot_pca_stress)})
 
             plot_tsne_stress = visualization(
-                self.trainmos[: len(syn_stress)], syn_stress, "tsne"
+                self.train_stress[: len(syn_stress)], syn_stress, "tsne"
             )
-
-            wandb.log({"tsne_stress": wandb.Image(plot_tsne_stress)})
 
             fig = generate_and_plot_data(
                 syn_stress,
-                syn_no_stress,
-                self.trainmos,
-                self.trainnomos,
+                syn_amuse,
+                syn_base,
+                self.train_stress,
+                self.train_amuse,
+                self.train_base,
                 self.num_seq,
                 self.seq_length,
             )
-
-            wandb.log({"signals": fig})
 
 
 def transformer_layer(inputs, hidden_size, num_heads, dropout_rate):
