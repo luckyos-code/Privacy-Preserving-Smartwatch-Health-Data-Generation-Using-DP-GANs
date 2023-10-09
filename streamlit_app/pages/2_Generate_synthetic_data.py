@@ -13,12 +13,14 @@ from streamlit_pandas_profiling import st_profile_report
 
 
 class StressType(Enum):
+    ALL = "All"
     BOTH = "Both"
     NON_STRESS = "Non-Stress"
     STRESS = "Stress"
 
 
 MODEL_DICT = {
+    "cGAN-3er": "cgan3er",
     "cGAN": "cgan/resilient_sweep-1",
     "DP-cGAN-e-0.1": "dp-cgan-e-0_1/light-sweep-1",
     "DP-cGAN-e-1": "dp-cgan-e-1/revived-sweep-2",
@@ -86,11 +88,17 @@ def generate(
         synth_samples = generate_samples(
             model, num_syn_samples, latent_dim, label_value
         )
-    else:
+    elif stress_type in [StressType.BOTH]:
         num_samples_half = num_syn_samples // 2
         non_stress_samples = generate_samples(model, num_samples_half, latent_dim, 0)
         stress_samples = generate_samples(model, num_samples_half, latent_dim, 1)
         synth_samples = np.concatenate((non_stress_samples, stress_samples))
+    elif stress_type in [StressType.ALL]:
+        num_samples_third = num_syn_samples // 3
+        base_samples = generate_samples(model, num_samples_third, latent_dim, 0)
+        amuse_samples = generate_samples(model, num_samples_third, latent_dim, 2)
+        stress_samples = generate_samples(model, num_samples_third, latent_dim, 1)
+        synth_samples = np.concatenate((base_samples, amuse_samples, stress_samples))
 
     return synth_samples
 
@@ -126,6 +134,9 @@ def generate_synthetic_data(
 
     # Add index
     df.index = pd.RangeIndex(1, len(df) + 1)
+
+    if stress_type in [StressType.ALL]:
+        df['Label'] = df['Label'].replace(2, 0.5)
 
     return df
 
@@ -176,7 +187,7 @@ def run():
     col1, col2 = st.columns([4, 2])
     with col1:
         model_selection = st.selectbox(
-            "Select the model", ["cGAN", "DP-cGAN-e-0.1", "DP-cGAN-e-1", "DP-cGAN-e-10"]
+            "Select the model", ["cGAN-3er", "cGAN", "DP-cGAN-e-0.1", "DP-cGAN-e-1", "DP-cGAN-e-10"]
         )
         model_name = MODEL_DICT[model_selection]
 
