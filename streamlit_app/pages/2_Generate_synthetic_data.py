@@ -21,6 +21,7 @@ class StressType(Enum):
 
 MODEL_DICT = {
     "cGAN-3er": "cgan3er",
+    "cGAN-3er-test": "no_dp/cgan3er",
     "cGAN": "cgan/resilient_sweep-1",
     "DP-cGAN-e-0.1": "dp-cgan-e-0_1/light-sweep-1",
     "DP-cGAN-e-1": "dp-cgan-e-1/revived-sweep-2",
@@ -187,7 +188,7 @@ def run():
     col1, col2 = st.columns([4, 2])
     with col1:
         model_selection = st.selectbox(
-            "Select the model", ["cGAN-3er", "cGAN", "DP-cGAN-e-0.1", "DP-cGAN-e-1", "DP-cGAN-e-10"]
+            "Select the model", ["cGAN-3er", "cGAN-3er-test", "cGAN", "DP-cGAN-e-0.1", "DP-cGAN-e-1", "DP-cGAN-e-10"]
         )
         model_name = MODEL_DICT[model_selection]
 
