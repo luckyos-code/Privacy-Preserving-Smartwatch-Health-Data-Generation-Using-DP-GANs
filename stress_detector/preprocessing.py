@@ -266,11 +266,11 @@ def create_training_data_per_subject_gen(fs, windows):
 
 def create_preprocessed_subjects_data_gen(windows: np.array, fs: int = 1) -> Tuple:
     # Creates averaged windows for all subjects from dataframes
-    print("Windows Shape: ", windows.shape)
+    # print("Windows Shape: ", windows.shape)
     X = create_training_data_per_subject_gen(fs, windows)
-    y = np.array((windows[:, 0, 6][: len(X)]))
+    y = windows[:, 0, 6][: len(X)]
 
-    return X, y
+    return np.array(X), np.array(y)
 
 
 def get_subject_window_data(subjects_preprosessed_data: Dict) -> Tuple[List, List]:
@@ -292,11 +292,14 @@ def save_subject_data(subjects_data, save_path: str):
 
 
 def load_data(
-    data_type: DataType,
-    sampling_rate: int,
-    synthetic_data_path: Optional[str] = None,
-    use_sliding_windows: bool = False,
-) -> Tuple[List, List]:
+    real_subj_cnt: int,
+    real_path: str,
+    syn_subj_cnt: int,
+    syn_path: str,
+    gan_type: DataType,
+    use_sliding_windows: bool,
+    sampling_rate: int = 1,
+) -> Tuple[List, List, List, List]:
     """
     Load preprocessed data from disk or create it from scratch.
 
@@ -309,74 +312,73 @@ def load_data(
         load_from_disk: Whether to load data from disk or create it from scratch.
 
     Returns:
-        A tuple of NumPy arrays containing the windowed data and corresponding labels.
+        Four NumPy arrays containing the windowed data and corresponding labels.
+        WESAD data is in subject-wise sublists for usage in LOSO.
+        Unnest using: np.concatenate(np.array([x for x in realX], dtype=object))
+        GAN data is unnested for direct usage in training.
 
     Raises:
         FileNotFoundError: If the data file is not found.
     """
 
-    try:
-        # load dictionary from pickle file
-        print("*** Try to load original data from disk ***\n")
-        with open(f"data/wesad/subject_data_{sampling_rate}hz.pickle", "rb") as f:
-            subjects_data = pickle.load(f)
-            print("original data loaded")
-    except FileNotFoundError:
-        print("*** File not found ***")
-        print("*** Preprocess data ***")
-        dataset = WESADDataset(DATA_PATH, constants.SUBJECT_IDS)
-        subjects_data = dataset.get_subject_dataframes(sampling_rate=sampling_rate)
-        save_subject_data(
-            subjects_data, f"data/wesad/subject_data_{sampling_rate}hz.pickle"
-        )
+    #TODOS: sliding windows, sampling rate
 
-    # if data_type == DataType.DGAN:
-    #     print("*** Add synthetic DGAN data ***")
-    #     syn_df = pd.read_csv(synthetic_data_path, index_col=0)
-    #     subjects_data["SYN"] = syn_df
-    #     print(syn_df)
+    assert (
+        real_subj_cnt > 0 or syn_subj_cnt > 0
+    ), "one count variable has to be >0"
 
-    subjects_preprocessed_data = create_preprocessed_subjects_data(
-        subjects_data, fs=sampling_rate, use_sliding_windows=use_sliding_windows
-    )
-    all_subjects_X, all_subjects_y = get_subject_window_data(subjects_preprocessed_data)
+    realX, realY = np.array([]), np.array([])
+    synX, synY = np.array([]), np.array([])
 
-    if data_type == DataType.CGAN:
-        print("*** Add synthetic cGAN data ***")
-        with open(synthetic_data_path, "rb") as f:
-            gen_data = np.load(f)
-        X, y = create_preprocessed_subjects_data_gen(gen_data, fs=1)
+    if real_subj_cnt > 0:
+        assert (
+            real_subj_cnt <= 15
+        ), "real_subj_cnt cannot be larger than 15"
 
-        all_subjects_X.append(X)
-        all_subjects_y.append(y)
+        try:
+            # load dictionary from pickle file
+            print(f"*** Adding real data from: {real_path} ***\n")
+            with open(real_path, "rb") as f:
+                real_data = pickle.load(f)
+                real_data = dict(list(real_data.items())[:real_subj_cnt])
 
-    if data_type == DataType.DPCGAN:
-        print("*** Add synthetic DP-cGAN data ***")
-        with open(synthetic_data_path, "rb") as f:
-            gen_data = np.load(f)
-        X, y = create_preprocessed_subjects_data_gen(gen_data, fs=1)
+            subjects_preprocessed_data = create_preprocessed_subjects_data(
+                real_data, fs=sampling_rate, use_sliding_windows=use_sliding_windows
+            )
 
-        all_subjects_X.append(X)
-        all_subjects_y.append(y)
+            realX, realY = get_subject_window_data(subjects_preprocessed_data)
+        except FileNotFoundError:
+            raise f"*** Error: real data file not found at: {real_path} ***"
 
-    if data_type == DataType.DGAN:
-        print("*** Add synthetic DGAN data ***")
-        with open(synthetic_data_path, "rb") as f:
-            gen_data = np.load(f)
-        X, y = create_preprocessed_subjects_data_gen(gen_data, fs=1)
+    if syn_subj_cnt > 0:
+        assert (
+            syn_subj_cnt <= 100
+        ), "syn_subj_cnt cannot be larger than 100"
 
-        all_subjects_X.append(X)
-        all_subjects_y.append(y)
+        try:
+            print(f"*** Adding synthetic data: {syn_path} ***\n")
+            # load from saved numpy array
+            if gan_type == DataType.TIMEGAN:
+                assert (
+                    syn_subj_cnt <= 15
+                ), "for timeGAN syn_subj_cnt cannot be larger than 30"
 
-    if data_type == DataType.TIMEGAN:
-        print("*** Add synthetic TIMEGAN data ***")
-        with open(synthetic_data_path, "rb") as f:
-            print(f"TimeGAN PATH: {synthetic_data_path}")
-            gen_data = np.load(f)
+                with open(syn_path, "rb") as f:
+                    syn_data = np.load(f)
+                    idx_max = 36*syn_subj_cnt
+                    syn_data = syn_data[:idx_max]
+                    # print(pd.DataFrame(syn_data.reshape(-1, syn_data.shape[-1])))
+            # load from saved csv file
+            else:
+                syn_df = pd.read_csv(syn_path, index_col=0)
+                sid_max = 1000 + syn_subj_cnt
+                syn_df = syn_df[syn_df["sid"] <= sid_max].drop(columns=["sid"])
+                syn_data = syn_df.to_numpy()
+                syn_data = syn_data.reshape(-1, 60, syn_data.shape[-1])
+            
+            synX, synY = create_preprocessed_subjects_data_gen(syn_data, fs=1)
+        except FileNotFoundError:
+            raise f"*** Error: synthetic data file not found at: {syn_path} ***"
 
-        X, y = create_preprocessed_subjects_data_gen(gen_data, fs=1)
-
-        all_subjects_X.append(X)
-        all_subjects_y.append(y)
-
-    return all_subjects_X, all_subjects_y
+    print(f"*** Loaded {real_subj_cnt} real subjects and {syn_subj_cnt} synthetic subjects ***")
+    return np.array(realX), np.array(realY), np.array(synX), np.array(synY)
