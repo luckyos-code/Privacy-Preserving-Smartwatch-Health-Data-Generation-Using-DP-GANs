@@ -78,11 +78,11 @@ def generate_samples(
         synth_samples[:, :, 6] = np.where(synth_samples[:, :, 6] >= 0.5, 1, 0)
     else:
         labels = tf.fill([num_samples, 1], label_value)
-        append_value = np.full([num_samples, 60, 1], label_value)
+        append_labels = np.full([num_samples, 60, 1], label_value)
 
         random_vector = tf.random.normal(shape=(num_samples, latent_dim))
         synth_samples = model([random_vector, labels])
-        synth_samples = np.append(np.array(synth_samples), append_value, axis=2)
+        synth_samples = np.append(np.array(synth_samples), append_labels, axis=2)
 
     return synth_samples
 
