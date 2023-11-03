@@ -297,7 +297,7 @@ def load_data(
     syn_subj_cnt: int,
     syn_path: str,
     gan_type: DataType,
-    use_sliding_windows: bool,
+    use_sliding_windows: bool = False,
     sampling_rate: int = 1,
 ) -> Tuple[List, List, List, List]:
     """
@@ -321,8 +321,6 @@ def load_data(
         FileNotFoundError: If the data file is not found.
     """
 
-    #TODOS: sliding windows, sampling rate
-
     assert (
         real_subj_cnt > 0 or syn_subj_cnt > 0
     ), "one count variable has to be >0"
@@ -337,7 +335,7 @@ def load_data(
 
         try:
             # load dictionary from pickle file
-            print(f"*** Adding real data from: {real_path} ***\n")
+            print(f"*** Adding real data from: WESAD ***")
             with open(real_path, "rb") as f:
                 real_data = pickle.load(f)
                 real_data = dict(list(real_data.items())[:real_subj_cnt])
@@ -348,7 +346,7 @@ def load_data(
 
             realX, realY = get_subject_window_data(subjects_preprocessed_data)
         except FileNotFoundError:
-            raise f"*** Error: real data file not found at: {real_path} ***"
+            raise FileNotFoundError(f"*** Error: real data file not found at: {real_path} ***")
 
     if syn_subj_cnt > 0:
         assert (
@@ -356,7 +354,7 @@ def load_data(
         ), "syn_subj_cnt cannot be larger than 100"
 
         try:
-            print(f"*** Adding synthetic data: {syn_path} ***\n")
+            print(f"*** Adding synthetic data from: {gan_type} ***")
             # load from saved numpy array
             if gan_type == DataType.TIMEGAN:
                 assert (
@@ -378,7 +376,7 @@ def load_data(
             
             synX, synY = create_preprocessed_subjects_data_gen(syn_data, fs=1)
         except FileNotFoundError:
-            raise f"*** Error: synthetic data file not found at: {syn_path} ***"
+            raise FileNotFoundError(f"*** Error: synthetic data file not found at: {syn_path} ***")
 
-    print(f"*** Loaded {real_subj_cnt} real subjects and {syn_subj_cnt} synthetic subjects ***")
-    return np.array(realX), np.array(realY), np.array(synX), np.array(synY)
+    print(f"*** Loaded {real_subj_cnt} real and {syn_subj_cnt} synthetic subjects ***\n")
+    return np.array(realX, dtype=object), np.array(realY, dtype=object), np.array(synX), np.array(synY)
