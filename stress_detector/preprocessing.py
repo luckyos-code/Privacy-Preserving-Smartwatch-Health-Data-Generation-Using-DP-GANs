@@ -296,7 +296,7 @@ def load_data(
     real_path: str,
     syn_subj_cnt: int,
     syn_path: str,
-    gan_type: DataType,
+    gan_mode: str,
     use_sliding_windows: bool = False,
     sampling_rate: int = 1,
 ) -> Tuple[List, List, List, List]:
@@ -354,9 +354,9 @@ def load_data(
         ), "syn_subj_cnt cannot be larger than 100"
 
         try:
-            print(f"*** Adding synthetic data from: {gan_type} ***")
+            print(f"*** Adding synthetic data from: {gan_mode} ***")
             # load from saved numpy array
-            if gan_type == DataType.TIMEGAN:
+            if gan_mode == "TIMEGAN":
                 assert (
                     syn_subj_cnt <= 15
                 ), "for timeGAN syn_subj_cnt cannot be larger than 30"
