@@ -263,9 +263,18 @@ def run():
                     subjs = []
                     for i in range(1, num_gen_rounds+1):
                         sid = 1000 + i # create ids starting at 1000
-                        df = generate_synthetic_data(
-                            model, num_syn_samples, latent_dim, stress_type
-                        )
+                        if model_name != "dgan":
+                            df = generate_synthetic_data(
+                                model, num_syn_samples, latent_dim, stress_type
+                            )
+                        else: # DGAN needs optimized stress ratio by hand
+                            stress_ratio = 0.0 
+                            while not (0.29 <= stress_ratio <= 0.32): # wesad min: 0.29, wesad max: 0.32
+                                df = generate_synthetic_data(
+                                    model, num_syn_samples, latent_dim, stress_type
+                                )
+                                stress_cnt = df['Label'].value_counts()[1.0]
+                                stress_ratio = stress_cnt / len(df['Label'])
                         # add subject id as column
                         df.insert(0, column="sid", value=np.full(shape=len(df.index), fill_value=sid))
                         subjs.append(df)
