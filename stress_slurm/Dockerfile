@@ -10,7 +10,8 @@ RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
     python3.8 get-pip.py
 
 COPY requirements-docker.txt requirements.txt
-RUN pip3.8 install --upgrade pip wheel setuptools --no-cache-dir && \
-    pip3.8 install -r requirements.txt --no-cache-dir
+
+# RUN pip3.8 install --upgrade pip wheel setuptools --no-cache-dir && \
+RUN    pip3.8 install -r requirements.txt --no-cache-dir
 
 WORKDIR /app
