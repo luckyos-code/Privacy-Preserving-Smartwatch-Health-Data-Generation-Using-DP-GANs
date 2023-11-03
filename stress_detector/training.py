@@ -129,7 +129,6 @@ def train(
         num_output_class == 2
     ), "Only binary classification supported right now (num_output_class is >2 right now)"
     print(f"*** Training {nn_mode} model in {eval_mode} mode ***")
-    print(f"LOSO train on {real_subj_cnt} real and {syn_subj_cnt} synthetic {gan_mode} subjects")
 
     realX, realY = realData
     synX, synY = synData
@@ -146,8 +145,9 @@ def train(
             real_subj_cnt >= 2
         ), "At least 2 real subjects needed for LOSO"
 
+        print(f"LOSO train on {real_subj_cnt} real and {syn_subj_cnt} synthetic {gan_mode} subjects - with eps={eps}")
         for test_idx in range(0, len(real_ids)):
-            start_time = time.monotonic()
+            
             # if test_sub is not None:
             #     if test_sub_index != test_index:
             #         print("SKIP training for test_index", test_index)
@@ -177,10 +177,9 @@ def train(
 
             if prepare_environment_func: prepare_environment_func()
 
-            print(X_train.shape)
-
             model = build_model(nn_mode, num_signals, num_output_class)
             model, delta, noise_multiplier = compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epochs, l2_norm_clip)
+            start_time = time.monotonic()
             model, history = train_model(model, X_train, Y_train, epochs, batch_size, validation_split=None, verbose=2)
             results[real_ids[test_idx]] = evaluate_model(model, X_test, Y_test)
 
@@ -197,9 +196,11 @@ def train(
             real_subj_cnt == 15
         ), "All 15 real subjects needed for TSTR (for now)" #TODO
 
+        print(f"TSTR train on {syn_subj_cnt} synthetic {gan_mode} and test on {real_subj_cnt} real subjects - with eps={eps}")
+
         # synthetic data is train set
         X_train, Y_train = synX, synY
-        Y_train = tf.keras.utils.to_categorical(y_train, num_output_class)
+        Y_train = tf.keras.utils.to_categorical(Y_train, num_output_class)
 
         if prepare_environment_func: prepare_environment_func()
 
@@ -219,7 +220,7 @@ def train(
                 raise Exception("DPCGAN not supported TSTR private training")
             else:
                 raise Exception("not a valid gan_mode")
-        else: gan_num_unique_windows, gan_epochs == None, None
+        else: gan_num_unique_windows, gan_epochs = None, None
 
         model, delta, noise_multiplier = compile_model(model, learning_rate, eps, gan_num_unique_windows, batch_size, gan_epochs, l2_norm_clip)
         model, history = train_model(model, X_train, Y_train, epochs, batch_size, validation_split=None, verbose=2)
@@ -230,7 +231,7 @@ def train(
             print(f"TSTR-LOSO on {real_ids[test_idx]} from WESAD ({test_idx+1}/{len(real_ids)})...")
             X_test = realX[test_idx]
             Y_test = realY[test_idx]
-            Y_test = tf.keras.utils.to_categorical(y_test, num_output_class)
+            Y_test = tf.keras.utils.to_categorical(Y_test, num_output_class)
             results[real_ids[test_idx]] = evaluate_model(model, X_test, Y_test)
 
     else: raise Exception(f"Unknown eval_mode: {eval_mode}")
