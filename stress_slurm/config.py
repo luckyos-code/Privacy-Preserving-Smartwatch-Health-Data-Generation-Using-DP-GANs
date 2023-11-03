@@ -43,19 +43,19 @@ GAN_CONFIG = {
     "DPCGAN-e-10": {
                 "gan_mode": "DPCGAN-e-10", 
                 "type": DataType.DPCGAN,
-                "path": "stress_slurm/data/100_subj_cGAN-e-10.csv",
+                "path": "stress_slurm/data/100_subj_DP-cGAN-e-10.csv",
                 "eps": 10
             },
     "DPCGAN-e-1": {
                 "gan_mode": "DPCGAN-e-1", 
                 "type": DataType.DPCGAN,
-                "path": "stress_slurm/data/100_subj_cGAN-e-1.csv",
+                "path": "stress_slurm/data/100_subj_DP-cGAN-e-1.csv",
                 "eps": 1
             },
     "DPCGAN-e-0.1": {
                 "gan_mode": "DPCGAN-e-0.1", 
                 "type": DataType.DPCGAN,
-                "path": "stress_slurm/data/100_subj_cGAN-e-0.1.csv",
+                "path": "stress_slurm/data/100_subj_DP-cGAN-e-0.1.csv",
                 "eps": 0.1
     },
 }
@@ -69,9 +69,9 @@ TRAIN_CONFIG = {
             },
     "Transformer": {
                 "nn_mode": "Transformer", 
-                "epochs": 10, # 110
+                "epochs": 110,
                 "batch_size": 50,
-                "learning_rate": 1e-3, # 1e-4
+                "learning_rate": 1e-4,
             },
 }
 
