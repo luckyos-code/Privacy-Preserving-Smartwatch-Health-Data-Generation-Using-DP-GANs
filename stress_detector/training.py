@@ -21,7 +21,7 @@ from datetime import timedelta
 
 from tensorflow_privacy.privacy.analysis.compute_noise_from_budget_lib import compute_noise as tfp_computer_noise
 from tensorflow_privacy.privacy.analysis import compute_dp_sgd_privacy
-from tensorflow_privacy.privacy.optimizers.dp_optimizer_keras_vectorized import VectorizedDPKerasAdamOptimizer
+from tensorflow_privacy.privacy.optimizers.dp_optimizer_vectorized import VectorizedDPAdamOptimizer
 
 """
 Calculate Delta for given training dataset size n
@@ -65,7 +65,7 @@ def compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epo
             target_epsilon=eps,
             epochs=epochs,
             delta=delta)
-        optimizer = VectorizedDPKerasAdamOptimizer(
+        optimizer = VectorizedDPAdamOptimizer(
             l2_norm_clip=l2_norm_clip,
             noise_multiplier=noise_multiplier,
             num_microbatches=batch_size,
@@ -154,6 +154,7 @@ def train(
             #         continue
 
             print(f"LOSO on {real_ids[test_idx]} from WESAD ({test_idx+1}/{len(real_ids)})...")
+            start_time = time.monotonic()
 
             # get real training data without LOSO test subject
             X_train = np.concatenate(np.delete(realX, test_idx, 0))
@@ -179,7 +180,6 @@ def train(
 
             model = build_model(nn_mode, num_signals, num_output_class)
             model, delta, noise_multiplier = compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epochs, l2_norm_clip)
-            start_time = time.monotonic()
             model, history = train_model(model, X_train, Y_train, epochs, batch_size, validation_split=None, verbose=2)
             results[real_ids[test_idx]] = evaluate_model(model, X_test, Y_test)
 
@@ -249,132 +249,3 @@ def train(
     }
 
     return results, delta, noise_multiplier
-
-
-def evaluate( #TODO
-    gan_scores_acc,
-    gan_scores_f1,
-    gan_scores_precision,
-    gan_scores_recall,
-    all_subjects_X,
-    all_subjects_y,
-    data_type: DataType,
-    num_epochs: int,
-    num_subjects: int = 1,
-    with_loso: bool = True,
-    subject_ids=[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17],
-    additional_name: str = None,
-):
-    model_path = ""
-
-    all_subjects_X_os = all_subjects_X
-    all_accuracies = []
-    all_precisions = []
-    all_recalls = []
-    all_f1s = []
-    num_output_class = 2
-
-    if not with_loso:
-        print("*** Train on Synth, test on Real ***")
-    else:
-        print("*** Evaluate using 'Leave One Subject Out'-Method ***")
-
-    if not with_loso:
-        print(f"DATATYPE: {data_type}")
-        if data_type == DataType.DGAN:
-            model_path = (
-                f"models/stress_detector/tstr/syn/dgan_30000/{num_epochs}/wesad.h5"
-            )
-        if data_type == DataType.CGAN_LSTM:
-            model_path = (
-                f"models/stress_detector/tstr/syn/cgan/no_dp/lstm/{num_epochs}/wesad.h5"
-            )
-        if data_type == DataType.CGAN_FCN:
-            model_path = (
-                f"models/stress_detector/tstr/syn/cgan/no_dp/fcn/{num_epochs}/wesad.h5"
-            )
-        if data_type == DataType.CGAN_TRANSFORMER:
-            model_path = f"models/stress_detector/tstr/syn/cgan/no_dp/transformer/{num_epochs}/wesad.h5"
-        if data_type == DataType.DPCGAN:
-            model_path = f"models/stress_detector/tstr/syn/cgan/dp/{num_epochs}/{additional_name}_wesad.h5"
-        if data_type == DataType.TIMEGAN:
-            model_path = (
-                f"models/stress_detector/tstr/syn/timegan/{num_epochs}/wesad.h5"
-            )
-        model = tf.keras.models.load_model(model_path)
-        print(f"LOADED: {model_path}")
-
-    all_confusion_matrices = []
-    for i, subject_id in enumerate(subject_ids):
-        test_index = constants.SUBJECT_IDS.index(subject_id)
-        X_test = np.asarray(all_subjects_X_os[test_index])
-        y_test = np.asarray(all_subjects_y[test_index])
-        y_test = tf.keras.utils.to_categorical(y_test, num_output_class)
-
-        if with_loso:
-            if data_type == DataType.REAL:
-                model_path = f"models/stress_detector/real/{num_epochs}/wesad_s{subject_id}.h5"  # Path to save the model file
-            if data_type == DataType.DGAN:
-                model_path = f"models/stress_detector/loso/syn/dgan_30000/{num_epochs}_epochs/{num_subjects}_subjects/wesad_s{subject_id}.h5"
-            if data_type == DataType.CGAN_LSTM:
-                model_path = f"models/stress_detector/loso/syn/cgan/no_dp/lstm/{num_epochs}_epochs/{num_subjects}_subjects/wesad_s{subject_id}.h5"
-            if data_type == DataType.CGAN_FCN:
-                model_path = f"models/stress_detector/loso/syn/cgan/no_dp/fcn/{num_epochs}_epochs/{num_subjects}_subjects/wesad_s{subject_id}.h5"
-            if data_type == DataType.CGAN_TRANSFORMER:
-                model_path = f"models/stress_detector/loso/syn/cgan/no_dp/transformer/{num_epochs}_epochs/{num_subjects}_subjects/wesad_s{subject_id}.h5"
-            if data_type == DataType.DPCGAN:
-                model_path = f"models/stress_detector/loso/syn/cgan/dp/{num_epochs}_epochs/{num_subjects}_subjects/wesad_s{subject_id}.h5"
-            if data_type == DataType.TIMEGAN:
-                model_path = f"models/stress_detector/loso/syn/timegan/{num_epochs}_epochs/{num_subjects}_subjects/wesad_s{subject_id}.h5"
-
-            print("MODEL_PATH:", model_path)
-            model = tf.keras.models.load_model(model_path)
-
-        ## Create confusion matrix
-        y_pred = model.predict(X_test)
-        y_pred = np.argmax(y_pred, axis=1)
-        y_true = np.argmax(y_test, axis=1)
-        confusion = confusion_matrix(y_true, y_pred)
-        all_confusion_matrices.append(confusion)
-
-        # get acc, prec, rec, f1
-        evaluation_metrics = model.evaluate(X_test, y_test, verbose=0)
-
-        accuracy = evaluation_metrics[1]
-        precision = evaluation_metrics[2]
-        recall = evaluation_metrics[3]
-
-        f1 = 2 * precision * recall / (precision + recall)
-        all_accuracies.append(accuracy)
-        all_precisions.append(precision)
-        all_recalls.append(recall)
-        all_f1s.append(f1)
-
-    print(f"GAN: {data_type.name}")
-    print(f"Evaluation of CNN model trained on {num_epochs} epochs\n")
-    print(f"Subject\t\t Accuracy\tPrecision\tRecall\t\tF1-Score")
-    print("************************************************************************")
-    for i in range(len(all_accuracies)):
-        print(
-            f"S{subject_ids[i]}\t\t {round(all_accuracies[i], 5):.5f}\t{round(all_precisions[i], 5):.5f}\t\t{round(all_recalls[i], 5):.5f}\t\t{round(all_f1s[i], 5):.5f}"
-        )
-
-    print("************************************************************************")
-    print(
-        f"Average\t\t {round(np.mean(all_accuracies), 5):.5f}\t{round(np.mean(all_precisions), 5):.5f}\t\t{round(np.mean(all_recalls), 5):.5f}\t\t{round(np.mean(all_f1s), 5):.5f}\n\n\n"
-    )
-
-    key_suffix = "_aug" if with_loso else "_tstr"
-    gan_scores_acc[f"{data_type.name}{key_suffix}{additional_name}"] = all_accuracies
-    gan_scores_f1[f"{data_type.name}{key_suffix}{additional_name}"] = all_f1s
-    gan_scores_precision[
-        f"{data_type.name}{key_suffix}{additional_name}"
-    ] = all_precisions
-    gan_scores_recall[f"{data_type.name}{key_suffix}{additional_name}"] = all_recalls
-
-    return {
-        "acc": gan_scores_acc,
-        "f1": gan_scores_f1,
-        "precision": gan_scores_precision,
-        "recall": gan_scores_recall,
-    }

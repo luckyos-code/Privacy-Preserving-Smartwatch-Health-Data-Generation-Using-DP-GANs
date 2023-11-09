@@ -1,5 +1,5 @@
 import pickle
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -273,7 +273,7 @@ def create_preprocessed_subjects_data_gen(windows: np.array, fs: int = 1) -> Tup
     return np.array(X), np.array(y)
 
 
-def get_subject_window_data(subjects_preprosessed_data: Dict) -> Tuple[List, List]:
+def get_subject_window_data(subjects_preprosessed_data: Dict) -> Tuple[list, list]:
     # Created train and test data for leave one out cross validation
     all_subjects_X = [
         subject_data["X"] for subject_data in subjects_preprosessed_data.values()
@@ -299,7 +299,7 @@ def load_data(
     gan_mode: str,
     use_sliding_windows: bool = False,
     sampling_rate: int = 1,
-) -> Tuple[List, List, List, List]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Load preprocessed data from disk or create it from scratch.
 

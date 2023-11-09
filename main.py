@@ -1,0 +1,138 @@
+import os
+import json
+import itertools
+
+from run_experiment import ci_experiment
+from stress_slurm import config
+
+
+def check_create_folder(dir: str):
+    """Check if a folder exists on the current file, if not, this function creates that folder."""
+    base_dir = os.path.realpath(os.getcwd())
+    check_dir = os.path.join(base_dir, dir)
+    if not os.path.exists(check_dir):
+        print(f"Directory {check_dir} does not exist, creating it")
+        os.makedirs(check_dir)
+
+def save_dict_as_json( #TODO make cool result dataframe and save this too
+    data: dict,
+    path: str,
+    file_name: str = None
+):
+    check_create_folder(path)
+    if file_name is not None:
+        filename = os.path.join(path,
+                                f"{file_name}.json")
+    else:
+        filename = os.path.join(path, "run.json")
+
+    print(f"Saving run to: {filename}")
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=2)
+
+def scenario_run(scenario_id: int, saving: bool = False):
+    # -scenarios:
+    #   -non-private for both cnn and transformer
+    #       -real LOSO = 1
+    #       -best GAN for different numbers in LOSO = 4
+    #       -best GAN for different numbers in TSTR = 3
+    #   -private for both cnn and transformer
+    #       -real LOSO = 1
+    #       -privacy gans for different numbers in TSTR = 3
+
+    base_save_folder = config.RESULTS_FOLDER_PATH + "/scenarios"
+    run_name = ""
+
+    # hardcoded options #TODO maybe put in config or derive from configs or something
+    num_ci_runs = 2 #TODO
+    models = ["CNN", "Transformer"]
+    np_gan_models = ["TIMEGAN", "DGAN", "CGAN"]
+    p_gan_models = ["CGAN", "DPCGAN-e-10", "DPCGAN-e-1", "DPCGAN-e-0.1"]
+    syn_subjs = [1, 5, 10, 15, 30, 50, 100]
+    eps_values = [None, 10, 1, 0.1]
+    eval_modes = ["LOSO", "TSTR"]
+
+    # 1 - LOSO - real data - both models - all eps
+    if scenario_id == 1:
+        scenario_name = "1-LOSO_15real"
+        save_folder = base_save_folder + "/" + scenario_name
+        print(f"***Running scenario {scenario_id}: {scenario_name}")
+
+        iter_lst = list(itertools.product(models, eps_values))
+        exp_num = len(iter_lst)
+        for i, (model, eps) in enumerate(iter_lst):
+            run_name = f"{model}_LOSO_15real"
+            run_name += "" if not eps else f"_eps{str(eps)}"
+            print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
+            run_dict = ci_experiment(
+                num_runs=num_ci_runs,
+                real_subj_cnt=3, #TODO
+                syn_subj_cnt=0,
+                gan_mode=None,
+                sliding_windows=False,
+                eval_mode="LOSO",
+                nn_mode=model,
+                eps=eps,
+                silent_runs=True #TODO
+            )
+            if saving:
+                save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
+            print()
+    # 2 - TSTR - all GANs - 15 subj - no eps
+    elif scenario_id == 2:
+        scenario_name = "2-TSTR_15syn"
+        save_folder = base_save_folder + "/" + scenario_name
+        print(f"***Running scenario {scenario_id}: {scenario_name}")
+
+        iter_lst = list(itertools.product(models, np_gan_models))
+        exp_num = len(iter_lst)
+        for i, (model, gan_mode) in enumerate(iter_lst):
+            run_name = f"{model}_TSTR_15syn_{gan_mode}"
+            print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
+            run_dict = ci_experiment(
+                num_runs=num_ci_runs,
+                real_subj_cnt=15,
+                syn_subj_cnt=15,
+                gan_mode=gan_mode,
+                sliding_windows=False,
+                eval_mode="TSTR",
+                nn_mode=model,
+                eps=None,
+                silent_runs=True #TODO
+            )
+            if saving:
+                save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
+            print()
+    # 3 - TSTR - CGAN - different subj counts - all eps
+    elif scenario_id == 3:
+        pass
+    # 4 - LOSO - CGAN - different subj counts - no eps
+    elif scenario_id == 4:
+        pass
+
+# get inputs and run experiment with these settings
+def main():
+    parser = config.create_arg_parse_instance()
+    args = parser.parse_args()
+
+    if not args.id:
+        print(f"Selected args:\n{args}")
+        run_dict = ci_experiment(
+            num_runs=args.runs,
+            real_subj_cnt=args.real,
+            syn_subj_cnt=args.syn,
+            gan_mode=args.gan,
+            sliding_windows=args.sliding,
+            eval_mode=args.eval,
+            nn_mode=args.model,
+            eps=args.privacy if args.privacy != 0 else None,
+            silent_runs=True
+        )
+        if args.saving:
+            save_dict_as_json(run_dict, path=config.RESULTS_FOLDER_PATH, file_name="args_run")
+    else:
+        scenario_run(args.id, args.saving)
+
+
+if __name__ == "__main__":
+    main()
