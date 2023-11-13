@@ -17,7 +17,7 @@ mkdir -p slurm_out
 echo "task id: ${SLURM_ARRAY_TASK_ID}"
 
 # start run
-!singularity exec \
+singularity exec \
     --cleanenv \
     --containall \
     -H $PWD:/home \

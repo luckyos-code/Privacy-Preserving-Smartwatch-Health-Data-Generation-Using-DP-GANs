@@ -45,9 +45,6 @@ def run(
         pd.__version__ == "2.0.1"
     ), f"got pandas {pd.__version__} but expected 2.0.1, probably means wrong cluster env"
 
-    # hide annoying messages
-    tf.get_logger().setLevel('ERROR')
-
     # look for cluster gpu
     print(tf.config.list_physical_devices('GPU'))
 
@@ -179,7 +176,6 @@ def ci_experiment(
     # add poor_ratio for models with f1 < 0.5
     cnt = 0
     for run_config in run_configs_lst:
-        print("f1: ", run_config["results"]["average"]["f1"])
         if run_config["results"]["average"]["f1"] < 0.5:
             cnt += 1
     ci_run_config["results"]["poor_ratio"] = cnt / len(run_configs_lst)

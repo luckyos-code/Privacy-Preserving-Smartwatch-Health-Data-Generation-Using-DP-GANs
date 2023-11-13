@@ -28,37 +28,31 @@ GAN_CONFIG = {
             },
     "TIMEGAN": {
                 "gan_mode": "TIMEGAN", 
-                "type": DataType.TIMEGAN,
                 "path": "stress_slurm/data/15_subj_timeGAN.npy",
                 "eps": None
             },
     "DGAN": {
                 "gan_mode": "DGAN", 
-                "type": DataType.DGAN,
                 "path": "stress_slurm/data/100_subj_DGAN.csv",
                 "eps": None
             },
     "CGAN": {
                 "gan_mode": "CGAN", 
-                "type": DataType.CGAN,
                 "path": "stress_slurm/data/100_subj_cGAN.csv",
                 "eps": None
             },
     "DPCGAN-e-10": {
                 "gan_mode": "DPCGAN-e-10", 
-                "type": DataType.DPCGAN,
                 "path": "stress_slurm/data/100_subj_DP-cGAN-e-10.csv",
                 "eps": 10
             },
     "DPCGAN-e-1": {
                 "gan_mode": "DPCGAN-e-1", 
-                "type": DataType.DPCGAN,
                 "path": "stress_slurm/data/100_subj_DP-cGAN-e-1.csv",
                 "eps": 1
             },
     "DPCGAN-e-0.1": {
                 "gan_mode": "DPCGAN-e-0.1", 
-                "type": DataType.DPCGAN,
                 "path": "stress_slurm/data/100_subj_DP-cGAN-e-0.1.csv",
                 "eps": 0.1
     },
@@ -138,7 +132,7 @@ def create_arg_parse_instance() -> ArgumentParser:
         "-m",
         "--model",
         type=str,
-        choices=["CNN", "Transformer"],
+        choices=["CNN", "Transformer", "CNN-LSTM"],
         help=
         "Model for classification. Only one can be selected!",
         metavar="M",
@@ -173,20 +167,4 @@ def create_arg_parse_instance() -> ArgumentParser:
         metavar="P",
     )
     return parser
-
-# NUM_RUNS=10
-# SLIDING=False,
-
-# PREPARED_RUNS = {
-#     0: Namespace(num_runs=NUM_RUNS,
-#                  real=,
-#                  syn=,
-#                  gan=,
-#                  sliding=SLIDING,
-#                  eval=,
-#                  model=,
-#                  privacy=)
-
-# }[args.id]
-# args = Namespace(a=1, b='c')
 

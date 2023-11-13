@@ -84,8 +84,11 @@ def compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epo
 
 def train_model(model, X_train, Y_train, epochs, batch_size, class_weight=True, validation_split=None, verbose=2) -> Tuple[tf.keras.Model, dict]:
     if class_weight: 
-        class_weight = {0: 1,
-                        1: (np.argmax(Y_train, axis=1).tolist().count(0) / np.argmax(Y_train, axis=1).tolist().count(1)),}
+        if not (np.argmax(Y_train, axis=1).tolist().count(1)): # time gan generates only one class (non-stress)
+            class_weight = None
+        else:
+            class_weight = {0: 1,
+                            1: (np.argmax(Y_train, axis=1).tolist().count(0) / np.argmax(Y_train, axis=1).tolist().count(1)),}
 
     history = model.fit(
         X_train,
@@ -183,7 +186,7 @@ def train(
 
             model = build_model(nn_mode, num_signals, num_output_class)
             model, delta, noise_multiplier = compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epochs, l2_norm_clip)
-            model, history = train_model(model, X_train, Y_train, epochs, batch_size, validation_split=None, verbose=2)
+            model, history = train_model(model, X_train, Y_train, epochs, batch_size, gan_mode, validation_split=None, verbose=2)
             results[real_ids[test_idx]] = evaluate_model(model, X_test, Y_test)
 
             end_time = time.monotonic()
@@ -225,6 +228,7 @@ def train(
                 raise Exception("not a valid gan_mode")
         else: gan_num_unique_windows, gan_epochs = None, None
 
+        #todo validation split
         model, delta, noise_multiplier = compile_model(model, learning_rate, eps, gan_num_unique_windows, batch_size, gan_epochs, l2_norm_clip)
         model, history = train_model(model, X_train, Y_train, epochs, batch_size, validation_split=None, verbose=2)
         

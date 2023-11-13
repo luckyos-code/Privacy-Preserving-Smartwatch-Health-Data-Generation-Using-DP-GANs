@@ -5,6 +5,9 @@ import itertools
 from run_experiment import ci_experiment
 from stress_slurm import config
 
+# fix annoying harmless warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 
 def check_create_folder(dir: str):
     """Check if a folder exists on the current file, if not, this function creates that folder."""
@@ -40,9 +43,11 @@ def scenario_run(scenario_id: int, saving: bool = False):
     #       -real LOSO = 1
     #       -privacy gans for different numbers in TSTR = 3
     #
+    # TODO
     # privatize gan afterwards
     # private gan and real data privatized
     # gan and real data privatized
+    # validation split 0.2 in TSTR
 
     base_save_folder = config.RESULTS_FOLDER_PATH + "/scenarios"
     run_name = ""
@@ -104,12 +109,12 @@ def scenario_run(scenario_id: int, saving: bool = False):
                 eval_mode="TSTR",
                 nn_mode=model,
                 eps=None,
-                silent_runs=True #TODO
+                silent_runs=True
             )
             if saving:
                 save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
             print("")
-    # 3 - TSTR - CGAN all eps - different subj counts - training no eps
+    # 3 - TSTR - CGAN and DP-CGAN - different subj counts - training no eps
     elif scenario_id == 3:
         scenario_str = "TSTR_cGAN"
         scenario_name = f"{scenario_id}-{scenario_str}"
@@ -119,7 +124,12 @@ def scenario_run(scenario_id: int, saving: bool = False):
         iter_lst = list(itertools.product(models, p_gan_models, syn_subjs))
         exp_num = len(iter_lst)
         for i, (model, gan_mode, syn_subj_cnt) in enumerate(iter_lst):
-            run_name = f"{model}_{scenario_str}_{gan_mode}"
+            if gan_mode == "DPCGAN-e-10": eps = 10
+            elif gan_mode ==  "DPCGAN-e-1": eps = 1
+            elif gan_mode ==  "DPCGAN-e-0.1": eps = 0.1
+            else: eps = None
+            run_name = f"{model}_{scenario_str}_syn{syn_subj_cnt}"
+            run_name += "" if not eps else f"_eps{str(eps)}"
             print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
             run_dict = ci_experiment(
                 num_runs=num_ci_runs,
@@ -129,8 +139,8 @@ def scenario_run(scenario_id: int, saving: bool = False):
                 sliding_windows=False,
                 eval_mode="TSTR",
                 nn_mode=model,
-                eps=None,
-                silent_runs=True #TODO
+                eps=eps,
+                silent_runs=True
             )
             if saving:
                 save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
@@ -145,7 +155,7 @@ def scenario_run(scenario_id: int, saving: bool = False):
         iter_lst = list(itertools.product(models, syn_subjs))
         exp_num = len(iter_lst)
         for i, (model, syn_subj_cnt) in enumerate(iter_lst):
-            run_name = f"{model}_{scenario_str}_{gan_mode}"
+            run_name = f"{model}_{scenario_str}_{syn_subj_cnt}"
             print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
             run_dict = ci_experiment(
                 num_runs=num_ci_runs,
@@ -156,7 +166,7 @@ def scenario_run(scenario_id: int, saving: bool = False):
                 eval_mode="LOSO",
                 nn_mode=model,
                 eps=None,
-                silent_runs=True #TODO
+                silent_runs=True
             )
             if saving:
                 save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
