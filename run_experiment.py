@@ -4,8 +4,7 @@ import pandas as pd
 import seaborn as sns
 import tensorflow as tf
 
-import os
-import sys
+import os, sys, copy
 from contextlib import nullcontext
 from contextlib import contextmanager
 import time
@@ -156,22 +155,40 @@ def ci_experiment(
                                   orient='index',
                                   columns=["accuracy", "precision", "recall", "f1"]) for run_config in run_configs_lst]
     df = pd.concat(dfs, axis=0)
-    
-    print(df.groupby(df.index).describe())
 
-    # averages = df.mean(axis=0)
-    # print(f"***Subjects:\n{df}")
-    # print(f"***Averages:\n{averages}")
+    grp_df = df.groupby(df.index)
 
-    # results["average"] = {
-    #     "accuracy": averages[0],
-    #     "precision": averages[1],
-    #     "recall": averages[2],
-    #     "f1": averages[3],
-    # }
+    ci_run_config = copy.deepcopy(run_configs_lst[0])
+    ci_run_config.pop("results")
+    ci_run_config["results"] = {
+        "num_runs": num_runs,
+        "mean": {},
+        "std": {},
+        "poor_ratio": None
+    }
 
-    ci_run_config = {}
-    ci_run_config["num_runs"]= num_runs
-    # print like in single run
+    real_ids = run_configs_lst[0]["results"].keys()
+
+    # add mean and std
+    mean_df = grp_df.mean()
+    std_df = grp_df.std()
+    for key in real_ids:
+        ci_run_config["results"]["mean"][key] = mean_df.loc[key].to_dict()
+        ci_run_config["results"]["std"][key] = std_df.loc[key].to_dict()
+
+    # add poor_ratio for models with f1 < 0.5
+    cnt = 0
+    for run_config in run_configs_lst:
+        print("f1: ", run_config["results"]["average"]["f1"])
+        if run_config["results"]["average"]["f1"] < 0.5:
+            cnt += 1
+    ci_run_config["results"]["poor_ratio"] = cnt / len(run_configs_lst)
+
+    # print ci results
+    print(f"***CI results:\n")
+    df = pd.DataFrame.from_dict(ci_run_config["results"]["mean"], orient='index', columns=["accuracy", "precision", "recall", "f1"])
+    print(df)
+    print(f"poor model ratio: {ci_run_config['results']['poor_ratio']}")
+
     return ci_run_config
 

@@ -77,6 +77,12 @@ TRAIN_CONFIG = {
                 "batch_size": 50,
                 "learning_rate": 1e-4,
             },
+    "CNN-LSTM": {
+                "nn_mode": "CNN-LSTM", 
+                "epochs": 20,
+                "batch_size": 50,
+                "learning_rate": 1e-3,
+            },            
 }
 
 PRIVACY_CONFIG = {

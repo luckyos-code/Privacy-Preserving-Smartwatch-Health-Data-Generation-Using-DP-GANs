@@ -13,11 +13,10 @@ import pandas as pd
 
 from stress_detector import constants
 from stress_detector.data.datatype import DataType
-from stress_detector.model import build_cnn, build_transformer
+from stress_detector.model import build_cnn, build_transformer, build_cnn_lstm
 
 import time
 from datetime import timedelta
-
 
 from tensorflow_privacy.privacy.analysis.compute_noise_from_budget_lib import compute_noise as tfp_computer_noise
 from tensorflow_privacy.privacy.analysis import compute_dp_sgd_privacy
@@ -50,6 +49,10 @@ def build_model(nn_mode, num_signals, num_output_class) -> tf.keras.Model:
         model = build_cnn(num_signals, num_output_class)
     elif nn_mode == "Transformer":
         model = model = build_transformer(num_signals, num_output_class)
+    elif nn_mode == "CNN-LSTM":
+        model = build_cnn_lstm(num_signals, num_output_class)
+    else:
+        raise Exception("not a valid model selection")
     return model
 
 def compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epochs, l2_norm_clip) -> Tuple[tf.keras.Model, float, float]:

@@ -1,4 +1,5 @@
 stress_slurm/gan.sif
+slurm_out/
 .keras/
 
 data_thesis/

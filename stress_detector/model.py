@@ -2,7 +2,7 @@ from typing import Tuple
 
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Conv1D, MultiHeadAttention, LayerNormalization, GlobalAveragePooling1D, Input, Flatten, InputLayer, Conv2D, BatchNormalization, MaxPooling2D, GlobalAveragePooling2D, Dense, Dropout
+from tensorflow.keras.layers import Conv1D, MultiHeadAttention, LayerNormalization, GlobalAveragePooling1D, Input, Flatten, InputLayer, Conv2D, BatchNormalization, MaxPooling2D, GlobalAveragePooling2D, Dense, Dropout, LSTM, TimeDistributed
 
 import contextlib
 @contextlib.contextmanager # TODO
@@ -84,3 +84,43 @@ def build_transformer(
     outputs = Dense(num_output_class, activation="sigmoid")(x)
     
     return tf.keras.Model(inputs, outputs)
+
+def build_cnn_lstm(
+    num_signals: int = 6,
+    num_output_class: int = 2,
+    dropout_rate: float = 0.3
+) -> tf.keras.models.Sequential:
+    with options({"layout_optimizer": False}): #TODO
+        model = tf.keras.models.Sequential([
+            # input_shape = 14 Signale (bei uns max. 6) X 210 Inputs (aus Tabelle nach Fourier)
+            InputLayer(input_shape=(num_signals, 210, 1)),
+            # add cnn
+            InputLayer(input_shape=(num_signals, 210, 1)),
+            Conv2D(filters=64, activation="relu", kernel_size=(1, 3), strides=1, padding="same"),
+            Dropout(rate=dropout_rate),
+            Conv2D(filters=64, activation="relu", kernel_size=(1, 3), strides=1, padding="same"),
+            Dropout(rate=dropout_rate),
+            Conv2D(filters=64, activation="relu", kernel_size=(1, 3), strides=1, padding="same"),
+            MaxPooling2D(pool_size=(1, 2)),
+            Dropout(rate=dropout_rate),
+            Conv2D(filters=64, activation="relu", kernel_size=(1, 3), strides=1, padding="same"),
+            Dropout(rate=dropout_rate),
+            MaxPooling2D(pool_size=(1, 2)),
+            Dropout(rate=dropout_rate),
+            # add lstm
+            BatchNormalization(),
+            TimeDistributed(Flatten()),
+            LSTM(128, return_sequences=True),
+            Dropout(rate=dropout_rate),
+            LSTM(64),
+            Dropout(rate=dropout_rate),
+            # add dense
+            Dense(units=128, activation="relu", kernel_initializer="glorot_uniform"),
+            Dropout(rate=dropout_rate),
+            Dense(units=64, activation="relu", kernel_initializer="glorot_uniform"),
+            Dropout(rate=dropout_rate),
+            # add output
+            Dense(units=num_output_class, activation="sigmoid")
+        ])
+    print(model.summary()) #TODO
+    return model
