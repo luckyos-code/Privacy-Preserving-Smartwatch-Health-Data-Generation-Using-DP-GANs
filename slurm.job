@@ -2,8 +2,9 @@
 
 #SBATCH --partition=clara
 #SBATCH --mail-type=FAIL,END
-#SBATCH --ntasks=1
-#SBATCH --mem=32G
+##SBATCH --ntasks=1
+##SBATCH --cpus-per-task=1
+#SBATCH --mem=64G
 ##SBATCH --gres=gpu:v100:1
 #SBATCH --gres=gpu:rtx2080ti:1
 #SBATCH --job-name=gan_stress
@@ -23,4 +24,4 @@ singularity exec \
     -H $PWD:/home \
     --nv \
     stress_slurm/gan.sif \
-    python3.8 main.py --id $SLURM_ARRAY_TASK_ID --saving
+    /bin/sh -c "export TF_CPP_MIN_LOG_LEVEL=2 && python3.8 main.py --id ${SLURM_ARRAY_TASK_ID} --saving"

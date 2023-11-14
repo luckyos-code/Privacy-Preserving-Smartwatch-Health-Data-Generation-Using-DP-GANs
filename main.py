@@ -5,7 +5,7 @@ import itertools
 from run_experiment import ci_experiment
 from stress_slurm import config
 
-# fix annoying harmless warnings
+# fix annoying harmless warnings - sadly not working #TODO
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -124,12 +124,7 @@ def scenario_run(scenario_id: int, saving: bool = False):
         iter_lst = list(itertools.product(models, p_gan_models, syn_subjs))
         exp_num = len(iter_lst)
         for i, (model, gan_mode, syn_subj_cnt) in enumerate(iter_lst):
-            if gan_mode == "DPCGAN-e-10": eps = 10
-            elif gan_mode ==  "DPCGAN-e-1": eps = 1
-            elif gan_mode ==  "DPCGAN-e-0.1": eps = 0.1
-            else: eps = None
-            run_name = f"{model}_{scenario_str}_syn{syn_subj_cnt}"
-            run_name += "" if not eps else f"_eps{str(eps)}"
+            run_name = f"{model}_{scenario_str}_syn{syn_subj_cnt}_{gan_mode}"
             print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
             run_dict = ci_experiment(
                 num_runs=num_ci_runs,
@@ -139,7 +134,7 @@ def scenario_run(scenario_id: int, saving: bool = False):
                 sliding_windows=False,
                 eval_mode="TSTR",
                 nn_mode=model,
-                eps=eps,
+                eps=None,
                 silent_runs=True
             )
             if saving:

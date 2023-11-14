@@ -212,7 +212,7 @@ def train(
 
         model = build_model(nn_mode, num_signals, num_output_class)
 
-        if eps:
+        if eps and False: # TODO
             gan_num_unique_windows = 545
             if gan_mode == "CGAN":
                 # epochs from GAN times 2 because of sliding windows doubling appearance of each sample

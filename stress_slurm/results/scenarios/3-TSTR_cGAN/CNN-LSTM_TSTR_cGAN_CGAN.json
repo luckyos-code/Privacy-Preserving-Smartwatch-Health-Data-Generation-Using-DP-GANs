@@ -1,8 +1,0 @@
-{
-  "real_subj_cnt": 15,
-  "real_path": "stress_slurm/data/wesad_1hz.pickle",
-  "sliding_windows": false,
-  "syn_subj_cnt": 1,
-  "gan_config": {
-    "gan_mode": "CGAN",
-    "type": 
