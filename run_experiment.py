@@ -37,6 +37,8 @@ def run(
     nn_mode: str = "CNN", # CNN or transformer
     eps: float = None,
     loaded_data: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = None,
+    data_noise_parameter: Optional[float] = None
+
 ) -> dict:
     gan_mode = gan_mode if syn_subj_cnt > 0 else "noGAN" # or any other gan name
 
@@ -50,7 +52,6 @@ def run(
 
     config.prepare_environment()
 
-    # TODO scenario config
     run_config = {
         # real data
         "real_subj_cnt": real_subj_cnt, # max 15 wesad
@@ -62,7 +63,7 @@ def run(
         # privacy
         "privacy_config": {**(config.PRIVACY_CONFIG), **{"eps": eps, "num_unique_windows": None}},
         # training
-        "train_config": {**(config.TRAIN_CONFIG[nn_mode]), **{"eval_mode": eval_mode, "random_seed": config.RANDOM_SEED}},
+        "train_config": {**(config.TRAIN_CONFIG[nn_mode]), **{"eval_mode": eval_mode, "random_seed": config.RANDOM_SEED, "data_noise_parameter":data_noise_parameter}},
     }
 
     # realX and realY is nested subject-wise for LOSO training
@@ -100,6 +101,7 @@ def run(
         num_unique_windows=run_config["privacy_config"]["num_unique_windows"],
         l2_norm_clip=run_config["privacy_config"]["l2_norm_clip"],
         prepare_environment_func=config.prepare_environment,
+        data_noise_parameter=data_noise_parameter
     )
 
     return run_config
@@ -113,7 +115,8 @@ def ci_experiment(
     eval_mode: str = "LOSO",
     nn_mode: str = "CNN",
     eps: float = None,
-    silent_runs: bool = True
+    silent_runs: bool = True,
+    data_noise_parameter: Optional[float] = None
 ) -> dict:
     # load experiment data
     gan_mode = gan_mode if syn_subj_cnt > 0 else "noGAN" # or any other gan name
@@ -140,7 +143,8 @@ def ci_experiment(
                 eval_mode,
                 nn_mode,
                 eps,
-                loaded_data=(realX, realY, synX, synY)
+                loaded_data=(realX, realY, synX, synY),
+                data_noise_parameter=data_noise_parameter
             )
         run_configs_lst.append(single_run_config)
         end_time = time.monotonic()
@@ -173,10 +177,10 @@ def ci_experiment(
         ci_run_config["results"]["mean"][key] = mean_df.loc[key].to_dict()
         ci_run_config["results"]["std"][key] = std_df.loc[key].to_dict()
 
-    # add poor_ratio for models with f1 < 0.5
+    # add poor_ratio for models with f1 <= 0.3, since target class stress is 0.3
     cnt = 0
     for run_config in run_configs_lst:
-        if run_config["results"]["average"]["f1"] < 0.5:
+        if run_config["results"]["average"]["f1"] <= 0.3:
             cnt += 1
     ci_run_config["results"]["poor_ratio"] = cnt / len(run_configs_lst)
 

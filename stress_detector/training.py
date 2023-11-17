@@ -38,11 +38,65 @@ Calculate noise for given training hyperparameters
 def compute_noise(n, batch_size, target_epsilon, epochs, delta, min_noise=1e-5):
     return tfp_computer_noise(n, batch_size, target_epsilon, epochs, delta, min_noise)
 
-# compute_dp_sgd_privacy.compute_dp_sgd_privacy(18900, #210*6*15 = 18900
-#                                               batch_size=params["batch_size"],
-#                                               noise_multiplier=params["noise_multiplier"],
-#                                               epochs=max(epochs_dict.values()), # siehe unten
-#                                               delta=1e-5)
+"""
+Add noise to data based on multiplier or epsilon
+
+Args:
+    data (np.ndarray): training data to noise, e.g. full WESAD shape should be of shape (15,) with unterlying concatenated data of (530,6,210).
+    target_epsilon (float): wanted epsilon replaces noise_multiplier arg, if given the noise is calculated assuming a machine learning task.
+    noise_multiplier (float): wanted noise_multipier if no target_epsilon given, directly states the wanted noise.
+    noise_type (str of "laplace" or "gaussian"): wanted noise distribution.
+    clip_max (bool): clipping to max of each signal for dp, if false clip to 1 as sensitity of similarity func.
+
+Returns:
+    tuple[np.ndarray, float, target_epsilon]: Windows with physiological measurements and corresponding labels.
+"""
+def create_noisy_data(data: np.ndarray,
+                      target_epsilon: float=None,
+                      noise_multiplier: float=None,
+                      noise_type: str="laplace",
+                      clip_max: bool=False):
+
+    if len(data.shape) == 1: # if data is saved per subject
+        points_per_subj = [subj.shape[0] for subj in data] # save number of data points belonging to each subject
+        data = np.concatenate(data) # flatten data to (n,6,210) for DP
+    else: points_per_subj = None
+
+    n = data.shape[0] # number of training samples
+    delta = compute_delta(n)
+    if target_epsilon:
+        noise_multiplier = compute_noise( # simulate one round of dp training to get aquivalent noise multiplier
+            n=n,
+            target_epsilon=target_epsilon,
+            delta=delta,
+            batch_size=n, # all data is evaluated at once and not in batches = sampling rate 100%
+            epochs=1 # all data is only evaluated in one query during attack = 1 step
+        )
+    else: # calculate assumed epsilon based on given noise
+        target_epsilon, _ = compute_dp_sgd_privacy.compute_dp_sgd_privacy(
+            n=n,
+            batch_size=n, # all data is evaluated at once and not in batches = sampling rate 100%
+            noise_multiplier=noise_multiplier,
+            epochs=1, # all data is only evaluated in one query during attack = 1 step
+            delta=delta
+        )
+
+    signal_splits = np.split(data, data.shape[1], axis=1) # per signal clipping preparation
+    
+    for idx, signal_data in enumerate(signal_splits):
+        clip = 1 if not clip_max else np.max(signal_data) # 1 as sensitity of similarity func or max of each signal as clip for DP
+
+        if noise_type == "laplace":
+            signal_splits[idx] = signal_data + np.random.laplace(loc=clip*noise_multiplier, size=signal_data.shape)
+        elif noise_type == "gaussian":
+            signal_splits[idx] = signal_data + np.random.normal(loc=clip*noise_multiplier, size=signal_data.shape)
+
+    noisy_data = np.concatenate(signal_splits, axis=1)
+
+    if points_per_subj: # reverse flattening back to subject-based array
+        noisy_data = np.asarray([noisy_data[:idx] for idx in points_per_subj], dtype=object)
+
+    return noisy_data, noise_multiplier, target_epsilon
 
 def build_model(nn_mode, num_signals, num_output_class) -> tf.keras.Model:
     if nn_mode == "CNN":
@@ -130,6 +184,7 @@ def train(
     num_unique_windows: int = None,
     l2_norm_clip: float = 1.0,
     prepare_environment_func: Optional[Callable] = None,
+    data_noise_parameter: Optional[float] = None
 ) -> Tuple[dict, float, float]:
     assert(
         num_output_class == 2
@@ -183,6 +238,11 @@ def train(
             Y_test = tf.keras.utils.to_categorical(Y_test, num_output_class)
 
             if prepare_environment_func: prepare_environment_func()
+
+            if data_noise_parameter: 
+                old_sample = X_train[0][0]
+                X_train, _, noised_eps = create_noisy_data(X_train, noise_multiplier=data_noise_parameter, clip_max=False)
+                print(f"\nExcerpt of change in data through noise:\n{old_sample-X_train[0][0]}")
 
             model = build_model(nn_mode, num_signals, num_output_class)
             model, delta, noise_multiplier = compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epochs, l2_norm_clip)
