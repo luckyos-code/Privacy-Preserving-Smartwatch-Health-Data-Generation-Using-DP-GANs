@@ -76,14 +76,14 @@ def scenario_run(scenario_id: int, saving: bool = False):
             print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
             run_dict = ci_experiment(
                 num_runs=num_ci_runs,
-                real_subj_cnt=15, #TODO
+                real_subj_cnt=15,
                 syn_subj_cnt=0,
                 gan_mode=None,
                 sliding_windows=False,
                 eval_mode="LOSO",
                 nn_mode=model,
                 eps=eps,
-                silent_runs=True #TODO
+                silent_runs=False
             )
             if saving:
                 save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
@@ -166,15 +166,15 @@ def scenario_run(scenario_id: int, saving: bool = False):
             if saving:
                 save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
             print("")
-    # 5 - noised data evaluation (no official dp)
+    # 5 - noised data evaluation (no official dp) for attack paper
     elif scenario_id == 5:
-        noise_options = [i for i in range(1,10)]
+        noise_options = [round(i * 0.1, 1) for i in range(0, 10)] + [float(i) for i in range(1, 11)]
         scenario_str = "LOSO_15real_noised"
         scenario_name = f"{scenario_id}-{scenario_str}"
         save_folder = base_save_folder + "/" + scenario_name
         print(f"***Running scenario {scenario_id}: {scenario_name}")
 
-        iter_lst = list(itertools.product(["CNN"], noise_options)) # TODO
+        iter_lst = list(itertools.product(["CNN"], noise_options))
         exp_num = len(iter_lst)
         for i, (model, data_noise_parameter) in enumerate(iter_lst):
             run_name = f"{model}_{scenario_str}{data_noise_parameter}"

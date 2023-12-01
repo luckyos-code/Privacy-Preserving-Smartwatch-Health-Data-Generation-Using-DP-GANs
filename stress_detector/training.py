@@ -42,7 +42,7 @@ def compute_noise(n, batch_size, target_epsilon, epochs, delta, min_noise=1e-5):
 Add noise to data based on multiplier or epsilon
 
 Args:
-    data (np.ndarray): training data to noise, e.g. full WESAD shape should be of shape (15,) with unterlying concatenated data of (530,6,210).
+    data (np.ndarray): training data to noise, e.g. full WESAD shape should be of shape (15,) with underlying concatenated data of (530,6,210) over the 15 subjects.
     target_epsilon (float): wanted epsilon replaces noise_multiplier arg, if given the noise is calculated assuming a machine learning task.
     noise_multiplier (float): wanted noise_multipier if no target_epsilon given, directly states the wanted noise.
     noise_type (str of "laplace" or "gaussian"): wanted noise distribution.
@@ -87,9 +87,9 @@ def create_noisy_data(data: np.ndarray,
         clip = 1 if not clip_max else np.max(signal_data) # 1 as sensitity of similarity func or max of each signal as clip for DP
 
         if noise_type == "laplace":
-            signal_splits[idx] = signal_data + np.random.laplace(loc=clip*noise_multiplier, size=signal_data.shape)
+            signal_splits[idx] = signal_data + np.random.laplace(scale=clip*noise_multiplier, size=signal_data.shape)
         elif noise_type == "gaussian":
-            signal_splits[idx] = signal_data + np.random.normal(loc=clip*noise_multiplier, size=signal_data.shape)
+            signal_splits[idx] = signal_data + np.random.normal(scale=clip*noise_multiplier, size=signal_data.shape)
 
     noisy_data = np.concatenate(signal_splits, axis=1)
 

@@ -17,17 +17,21 @@ def create_noisy_data(data: np.ndarray, noise_multiplier: float=None, noise_type
     for idx, signal_data in enumerate(data):
         clip = 1 if not clip_max else np.max(signal_data) # 1 as sensitity of similarity func or max of each signal as clip for DP
         if noise_type == "laplace":
-            noisy_data[idx] = signal_data + np.random.laplace(loc=clip*noise_multiplier, size=signal_data.shape)
+            noisy_data[idx] = signal_data + np.random.laplace(scale=clip*noise_multiplier, size=signal_data.shape)
         elif noise_type == "gaussian":
-            noisy_data[idx] = signal_data + np.random.normal(loc=clip*noise_multiplier, size=signal_data.shape)
+            noisy_data[idx] = signal_data + np.random.normal(scale=clip*noise_multiplier, size=signal_data.shape)
     return noisy_data
 
 def main():
-    noise_multiplier = 1.0
+    noise_multiplier = 100.0
     data = np.random.rand(6,100)
 
     noisy_data = create_noisy_data(data, noise_multiplier)
-    print(noisy_data[0][:10] - data[0][:10])
+    diff = noisy_data[0][:100] - data[0][:100]
+    print("diff: ", diff)
+    print("min: ", diff.min())
+    print("max: ", diff.max())
+    
 
 
 if __name__ == "__main__":
