@@ -73,7 +73,7 @@ def generate_samples(
 
 
 def generate(
-    model: keras.models.Model,
+    model: keras.models.Model | DGAN,
     num_syn_samples: int,
     latent_dim: int,
     stress_type: StressType,
@@ -88,11 +88,16 @@ def generate(
         synth_samples = generate_samples(
             model, num_syn_samples, latent_dim, label_value
         )
-    else:
-        num_samples_half = num_syn_samples // 2
-        non_stress_samples = generate_samples(model, num_samples_half, latent_dim, 0)
-        stress_samples = generate_samples(model, num_samples_half, latent_dim, 1)
-        synth_samples = np.concatenate((non_stress_samples, stress_samples))
+    elif stress_type in [StressType.BOTH]:
+        if type(model) is DGAN:
+            synth_samples = generate_samples(model, num_syn_samples, latent_dim, 0)
+        else:
+            # wesad subject has 70% non-stress and 30% stress data on average
+            num_samples_non =  int(np.floor(0.7 * num_syn_samples))
+            num_samples_stress = int(np.floor(0.3 * num_syn_samples))
+            non_stress_samples = generate_samples(model, num_samples_non, latent_dim, 0)
+            stress_samples = generate_samples(model, num_samples_stress, latent_dim, 1)
+            synth_samples = np.concatenate((non_stress_samples, stress_samples))
 
     return synth_samples
 
