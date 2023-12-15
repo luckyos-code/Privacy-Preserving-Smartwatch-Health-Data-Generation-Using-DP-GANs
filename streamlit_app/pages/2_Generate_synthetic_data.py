@@ -23,6 +23,8 @@ MODEL_DICT = {
     "DP-cGAN-e-0.1": "dp-cgan-e-0_1/light-sweep-1",
     "DP-cGAN-e-1": "dp-cgan-e-1/revived-sweep-2",
     "DP-cGAN-e-10": "dp-cgan-e-10/usual-sweep-3",
+
+    "cGAN-10-new": "new_cgan/10",
 }  # Update with your model names or paths
 
 ITOSIG = {
@@ -176,7 +178,7 @@ def run():
     col1, col2 = st.columns([4, 2])
     with col1:
         model_selection = st.selectbox(
-            "Select the model", ["cGAN", "DP-cGAN-e-0.1", "DP-cGAN-e-1", "DP-cGAN-e-10"]
+            "Select the model", list(MODEL_DICT.keys())
         )
         model_name = MODEL_DICT[model_selection]
 
