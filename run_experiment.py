@@ -44,8 +44,8 @@ def run(
 
     # check if cluster is in correct env
     assert(
-        pd.__version__ == "2.0.1"
-    ), f"got pandas {pd.__version__} but expected 2.0.1, probably means wrong cluster env"
+        pd.__version__ == "2.0.1" or pd.__version__ == "1.4.1"
+    ), f"got pandas {pd.__version__} but expected 2.0.1 or 1.4.1, probably means wrong cluster env"
 
     # look for cluster gpu
     print(tf.config.list_physical_devices('GPU'))

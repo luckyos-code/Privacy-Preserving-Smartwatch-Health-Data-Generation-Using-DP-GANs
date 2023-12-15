@@ -1,4 +1,4 @@
-stress_slurm/gan.sif
+stress_slurm/*.sif
 slurm_out/
 .keras/
 

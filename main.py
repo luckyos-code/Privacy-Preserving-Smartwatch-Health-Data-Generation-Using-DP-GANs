@@ -35,19 +35,19 @@ def save_dict_as_json( #TODO make cool result dataframe and save this too
 
 def scenario_run(scenario_id: int, saving: bool = False):
     # -scenarios:
-    #   -non-private for both cnn and transformer
+    #   -non-private for all models
     #       -real LOSO = 1
+    #       -all GANs for 15 subjects in TSTR = 2
     #       -best GAN for different numbers in LOSO = 4
     #       -best GAN for different numbers in TSTR = 3
-    #   -private for both cnn and transformer
+    #   -private for all models
     #       -real LOSO = 1
     #       -privacy gans for different numbers in TSTR = 3
+    #.      - privatize real data combined with same eps private GAN data in LOSO = 6
     #
     # TODO
-    # privatize gan afterwards
-    # private gan and real data privatized
-    # gan and real data privatized
-    # validation split 0.2 in TSTR
+    # privatize non-private gan data afterwards
+    # above point but gan data and real data combined in training
 
     base_save_folder = config.RESULTS_FOLDER_PATH + "/scenarios"
     run_name = ""
@@ -67,6 +67,8 @@ def scenario_run(scenario_id: int, saving: bool = False):
         scenario_name = f"{scenario_id}-{scenario_str}"
         save_folder = base_save_folder + "/" + scenario_name
         print(f"***Running scenario {scenario_id}: {scenario_name}")
+        
+        eps_values = [10, 1, 0.1] # TODO delete
 
         iter_lst = list(itertools.product(models, eps_values))
         exp_num = len(iter_lst)
@@ -83,7 +85,7 @@ def scenario_run(scenario_id: int, saving: bool = False):
                 eval_mode="LOSO",
                 nn_mode=model,
                 eps=eps,
-                silent_runs=False
+                silent_runs=True
             )
             if saving:
                 save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
@@ -146,7 +148,7 @@ def scenario_run(scenario_id: int, saving: bool = False):
         scenario_name = f"{scenario_id}-{scenario_str}"
         save_folder = base_save_folder + "/" + scenario_name
         print(f"***Running scenario {scenario_id}: {scenario_name}")
-
+        
         iter_lst = list(itertools.product(models, syn_subjs))
         exp_num = len(iter_lst)
         for i, (model, syn_subj_cnt) in enumerate(iter_lst):
@@ -168,7 +170,9 @@ def scenario_run(scenario_id: int, saving: bool = False):
             print("")
     # 5 - noised data evaluation (no official dp) for attack paper
     elif scenario_id == 5:
-        noise_options = [round(i * 0.1, 1) for i in range(0, 10)] + [float(i) for i in range(1, 11)]
+        # test noise from 0.0 in 0.1 steps until 1.0 and then in 1.0 steps until 10.0
+        noise_options = [round(i * 0.1, 1) for i in range(0, 9+1)] + [float(i) for i in range(1, 15+1)]
+        
         scenario_str = "LOSO_15real_noised"
         scenario_name = f"{scenario_id}-{scenario_str}"
         save_folder = base_save_folder + "/" + scenario_name
@@ -190,6 +194,40 @@ def scenario_run(scenario_id: int, saving: bool = False):
                 eps=None,
                 silent_runs=True,
                 data_noise_parameter=data_noise_parameter,
+            )
+            if saving:
+                save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
+            print("")
+            
+    # 4 - LOSO - real data + priavte CGANs - best subj count - eps
+    elif scenario_id == 6:
+        scenario_str = "LOSO_cGAN_priv"
+        scenario_name = f"{scenario_id}-{scenario_str}"
+        save_folder = base_save_folder + "/" + scenario_name
+        print(f"***Running scenario {scenario_id}: {scenario_name}")
+        
+        p_gan_tuples = [("CGAN", None), ("DPCGAN-e-10", 10.0), ("DPCGAN-e-1", 1.0), ("DPCGAN-e-0.1", 0.1)] # TODO
+        syn_subjs = [100] # TODO
+        
+        iter_lst = list(itertools.product([models[2]], syn_subjs, p_gan_tuples))
+        exp_num = len(iter_lst)
+        for i, (model, syn_subj_cnt, p_gan_tuple) in enumerate(iter_lst):
+            gan_mode = p_gan_tuple[0]
+            eps = p_gan_tuple[1]
+            
+            run_name = f"{model}_{scenario_str}_syn{syn_subj_cnt}"
+            run_name += "" if not eps else f"_eps{str(eps)}"
+            print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
+            run_dict = ci_experiment(
+                num_runs=num_ci_runs,
+                real_subj_cnt=15,
+                syn_subj_cnt=syn_subj_cnt,
+                gan_mode=gan_mode,
+                sliding_windows=False,
+                eval_mode="LOSO",
+                nn_mode=model,
+                eps=eps,
+                silent_runs=True
             )
             if saving:
                 save_dict_as_json(run_dict, path=save_folder, file_name=run_name)

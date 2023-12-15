@@ -21,6 +21,8 @@ from datetime import timedelta
 from tensorflow_privacy.privacy.analysis.compute_noise_from_budget_lib import compute_noise as tfp_computer_noise
 from tensorflow_privacy.privacy.analysis import compute_dp_sgd_privacy
 from tensorflow_privacy.privacy.optimizers.dp_optimizer_vectorized import VectorizedDPAdamOptimizer
+from tensorflow_privacy.privacy.optimizers.dp_optimizer_keras import DPKerasAdamOptimizer
+from tensorflow_privacy.privacy.optimizers.dp_optimizer_keras_vectorized import VectorizedDPKerasAdamOptimizer
 
 """
 Calculate Delta for given training dataset size n
@@ -112,8 +114,14 @@ def build_model(nn_mode, num_signals, num_output_class) -> tf.keras.Model:
 def compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epochs, l2_norm_clip) -> Tuple[tf.keras.Model, float, float]:
     if not eps:
         optimizer = Adam(learning_rate=learning_rate)
+        loss = "binary_crossentropy"
         delta, noise_multiplier = None, None
     else:
+        # check if cluster is in correct env
+        assert(
+            tf.__version__ == "2.7.1"
+        ), f"got tf {tf.__version__} but expected 2.7.1 for tf privacy"
+        
         # calculate relevant training sample number
         delta = compute_delta(num_unique_windows)
         noise_multiplier = compute_noise(
@@ -122,16 +130,17 @@ def compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epo
             target_epsilon=eps,
             epochs=epochs,
             delta=delta)
-        optimizer = VectorizedDPAdamOptimizer(
+        optimizer = VectorizedDPKerasAdamOptimizer(
             l2_norm_clip=l2_norm_clip,
             noise_multiplier=noise_multiplier,
-            num_microbatches=batch_size,
+            num_microbatches=1, #TODO fix because batch_size gives error
             learning_rate=learning_rate
         )
-
+        loss = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction=tf.losses.Reduction.NONE)
+    
     model.compile(
         optimizer=optimizer,
-        loss="binary_crossentropy",
+        loss=loss,
         metrics=['accuracy', Precision(), Recall()],
     )
     return model, delta, noise_multiplier
@@ -227,6 +236,8 @@ def train(
 
             # add synthetic subjects
             if syn_subj_cnt > 0:
+                #if eps: # TODO
+                #    raise Exception("private training for LOSO with syn data augmentation not implemented yet")
                 X_train = np.concatenate((X_train, synX)) # inside parenthesis because matrice-like structure
                 Y_train = np.concatenate((Y_train, synY))
 
@@ -273,6 +284,7 @@ def train(
         model = build_model(nn_mode, num_signals, num_output_class)
 
         if eps and False: # TODO
+            raise Exception("private training for tstr gan not implemented yet")
             gan_num_unique_windows = 545
             if gan_mode == "CGAN":
                 # epochs from GAN times 2 because of sliding windows doubling appearance of each sample
