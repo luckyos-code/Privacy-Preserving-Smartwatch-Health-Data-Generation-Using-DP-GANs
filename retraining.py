@@ -1,4 +1,5 @@
 import numpy as np
+from argparse import ArgumentParser
 import tensorflow as tf
 from tensorflow.keras.optimizers.legacy import Adam
 from tensorflow_privacy.privacy.optimizers import dp_optimizer_vectorized
@@ -23,7 +24,15 @@ from synthesizers.utils.training import data_split
 
 def main():
 
-    parser = config.create_arg_parse_instance()
+    parser = ArgumentParser(prog="Augmented Private Stress Detection using GANs and DP")
+    parser.add_argument(
+        "-n",
+        "--noise_mult",
+        type=int,
+        help=
+        "noise_mult one of [None, 10, 1, 0.1].",
+        metavar="N",
+    )
     args = parser.parse_args()
     
     noise_mult = args.noise_mult

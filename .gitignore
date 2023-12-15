@@ -1,4 +1,5 @@
 gan.sif
+.keras/
 
 data_thesis/
 models_thesis/
