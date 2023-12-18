@@ -1,8 +1,18 @@
+from __future__ import annotations
+
 import io
 import zipfile
 from enum import Enum
 
+import os
+import sys
+sys.path.insert(0, os.path.join(os.getcwd()))
+#raise Exception(os.path.join(os.getcwd()))
+from synthesizers.dgan.dgan import DGAN
+from synthesizers.dgan.config import DGANConfig
+
 import keras
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -16,15 +26,16 @@ class StressType(Enum):
     BOTH = "Both"
     NON_STRESS = "Non-Stress"
     STRESS = "Stress"
-
+    ALL = "All" # including amusement
 
 MODEL_DICT = {
     "cGAN": "cgan/resilient_sweep-1",
     "DP-cGAN-e-0.1": "dp-cgan-e-0_1/light-sweep-1",
     "DP-cGAN-e-1": "dp-cgan-e-1/revived-sweep-2",
     "DP-cGAN-e-10": "dp-cgan-e-10/usual-sweep-3",
-
-    "cGAN-10-new": "new_cgan/10",
+    
+    "new-10": "new_cgan/10",
+    "new-1": "new_cgan/1",
 }  # Update with your model names or paths
 
 ITOSIG = {
@@ -39,7 +50,7 @@ ITOSIG = {
 
 
 def generate_samples(
-    model: keras.models.Model, num_samples: int, latent_dim: int, label_value: int
+    model: keras.models.Model | DGAN, num_samples: int, latent_dim: int, label_value: int
 ) -> np.ndarray:
     """
     Generate synthetic data samples.
@@ -62,12 +73,16 @@ def generate_samples(
         isinstance(latent_dim, int) and latent_dim > 0
     ), "latent_dim should be a positive integer"
 
-    labels = tf.fill([num_samples, 1], label_value)
-    append_value = np.full([num_samples, 60, 1], label_value)
+    if type(model) is DGAN:
+        _, synth_samples = model.generate_numpy(num_samples)
+        synth_samples[:, :, 6] = np.where(synth_samples[:, :, 6] >= 0.5, 1, 0)
+    else:
+        labels = tf.fill([num_samples, 1], label_value)
+        append_labels = np.full([num_samples, 60, 1], label_value)
 
-    random_vector = tf.random.normal(shape=(num_samples, latent_dim))
-    synth_samples = model([random_vector, labels])
-    synth_samples = np.append(np.array(synth_samples), append_value, axis=2)
+        random_vector = tf.random.normal(shape=(num_samples, latent_dim))
+        synth_samples = model([random_vector, labels])
+        synth_samples = np.append(np.array(synth_samples), append_labels, axis=2)
 
     return synth_samples
 
@@ -98,6 +113,12 @@ def generate(
             non_stress_samples = generate_samples(model, num_samples_non, latent_dim, 0)
             stress_samples = generate_samples(model, num_samples_stress, latent_dim, 1)
             synth_samples = np.concatenate((non_stress_samples, stress_samples))
+    elif stress_type in [StressType.ALL]:
+        num_samples_third = num_syn_samples // 3
+        base_samples = generate_samples(model, num_samples_third, latent_dim, 0)
+        amuse_samples = generate_samples(model, num_samples_third, latent_dim, 2)
+        stress_samples = generate_samples(model, num_samples_third, latent_dim, 1)
+        synth_samples = np.concatenate((base_samples, amuse_samples, stress_samples))
 
     return synth_samples
 
@@ -118,12 +139,15 @@ def convert_df(df: pd.DataFrame) -> bytes:
     return df.to_csv(index=True).encode("utf-8")
 
 
-def load_model(model_name: str) -> keras.models.Model:
-    return keras.models.load_model(f"models/{model_name}/generator")
+def load_model(model_name: str) -> keras.models.Model | DGAN:
+    if model_name == "dgan":
+        return DGAN.load(f"models/{model_name}/model_load_generator")
+    else:
+        return keras.models.load_model(f"models/{model_name}/generator")
 
 
 def generate_synthetic_data(
-    model: keras.models.Model, num_syn_samples: int, latent_dim: int, stress_type: str
+    model: keras.models.Model | DGAN, num_syn_samples: int, latent_dim: int, stress_type: str
 ) -> pd.DataFrame:
     synth_data = generate(model, num_syn_samples, latent_dim, stress_type)
     df = pd.DataFrame(synth_data.reshape(-1, synth_data.shape[-1]))
@@ -134,13 +158,17 @@ def generate_synthetic_data(
     # Add index
     df.index = pd.RangeIndex(1, len(df) + 1)
 
+    if stress_type in [StressType.ALL]:
+        df['Label'] = df['Label'].replace(2, 0.5)
+
     return df
 
 
 def display_dataframe(df: pd.DataFrame, show_profile: bool = True) -> None:
     st.dataframe(df)
     # For each signal in the synthetic data
-    st.line_chart(df, height=200)
+    if 'sid' in df.columns: st.line_chart(df.drop(columns=["sid"]), height=200)
+    else: st.line_chart(df, height=200)
 
     if show_profile:
         pr = ProfileReport(df, explorative=True)
@@ -158,7 +186,12 @@ def download_dataframe(df: pd.DataFrame, model_name: str) -> None:
     )
 
 def download_dataframe_zipped(subjs: np.ndarray, model_name: str) -> None:
-    subjs_csv = [(f"g{df['sid'].iloc[0]}.csv", convert_df(df)) for df in subjs]
+    # create one big csv
+    df = pd.concat(subjs)
+    subjs_csv = [(f"{len(subjs)}_subj_synthetic_{model_name}.csv", convert_df(df))]
+
+    # create many single csvs
+    #subjs_csv = [(f"g{df['sid'].iloc[0]}.csv", convert_df(df)) for df in subjs]
 
     zip_buffer = io.BytesIO()
 
@@ -172,7 +205,7 @@ def download_dataframe_zipped(subjs: np.ndarray, model_name: str) -> None:
     st.download_button(
         "Download synthetic data as zipped CSVs",
         zip_data,
-        file_name=f"{len(subjs_csv)}_subj_synthetic_{model_name}.zip",
+        file_name=f"{len(subjs)}_subj_synthetic_{model_name}.zip",
         mime="application/zip",
         key="down-load-zip",
     )
@@ -230,14 +263,23 @@ def run():
                     subjs = []
                     for i in range(1, num_gen_rounds+1):
                         sid = 1000 + i # create ids starting at 1000
-                        df = generate_synthetic_data(
-                            model, num_syn_samples, latent_dim, stress_type
-                        )
+                        if model_name != "dgan":
+                            df = generate_synthetic_data(
+                                model, num_syn_samples, latent_dim, stress_type
+                            )
+                        else: # DGAN needs optimized stress ratio by hand
+                            stress_ratio = 0.0 
+                            while not (0.29 <= stress_ratio <= 0.32): # wesad min: 0.29, wesad max: 0.32
+                                df = generate_synthetic_data(
+                                    model, num_syn_samples, latent_dim, stress_type
+                                )
+                                stress_cnt = df['Label'].value_counts()[1.0]
+                                stress_ratio = stress_cnt / len(df['Label'])
                         # add subject id as column
                         df.insert(0, column="sid", value=np.full(shape=len(df.index), fill_value=sid))
                         subjs.append(df)
                 
-                [display_dataframe(df.drop(columns=["sid"]), show_profile=False) for df in subjs[:3]]
+                [display_dataframe(df, show_profile=False) for df in subjs[:3]]
                 st.success("Synthetic data has been generated successfully!")
                 download_dataframe_zipped(subjs, model_selection)
             except Exception as e:
