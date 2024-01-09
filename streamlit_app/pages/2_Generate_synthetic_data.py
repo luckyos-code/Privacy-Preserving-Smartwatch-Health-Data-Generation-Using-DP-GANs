@@ -217,7 +217,7 @@ def run():
     col1, col2 = st.columns([4, 2])
     with col1:
         model_selection = st.selectbox(
-            "Select the model", list(MODEL_DICT.keys()
+            "Select the model", list(MODEL_DICT.keys())
         )
         model_name = MODEL_DICT[model_selection]
 

@@ -68,7 +68,7 @@ def scenario_run(scenario_id: int, saving: bool = False):
         save_folder = base_save_folder + "/" + scenario_name
         print(f"***Running scenario {scenario_id}: {scenario_name}")
         
-        eps_values = [10, 1, 0.1] # TODO delete
+        eps_values = [None]
 
         iter_lst = list(itertools.product(models, eps_values))
         exp_num = len(iter_lst)
@@ -122,6 +122,8 @@ def scenario_run(scenario_id: int, saving: bool = False):
         scenario_name = f"{scenario_id}-{scenario_str}"
         save_folder = base_save_folder + "/" + scenario_name
         print(f"***Running scenario {scenario_id}: {scenario_name}")
+        
+        p_gan_models = ["DPCGAN-e-1"]
 
         iter_lst = list(itertools.product(models, p_gan_models, syn_subjs))
         exp_num = len(iter_lst)
@@ -207,9 +209,10 @@ def scenario_run(scenario_id: int, saving: bool = False):
         print(f"***Running scenario {scenario_id}: {scenario_name}")
         
         p_gan_tuples = [("CGAN", None), ("DPCGAN-e-10", 10.0), ("DPCGAN-e-1", 1.0), ("DPCGAN-e-0.1", 0.1)] # TODO
+        p_gan_tuples = [("DPCGAN-e-10", 10.0)]
         syn_subjs = [100] # TODO
         
-        iter_lst = list(itertools.product([models[2]], syn_subjs, p_gan_tuples))
+        iter_lst = list(itertools.product(models, syn_subjs, p_gan_tuples))
         exp_num = len(iter_lst)
         for i, (model, syn_subj_cnt, p_gan_tuple) in enumerate(iter_lst):
             gan_mode = p_gan_tuple[0]

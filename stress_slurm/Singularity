@@ -3,7 +3,7 @@ From: tensorflow/tensorflow:2.12.0-gpu
 Stage: spython-base
 
 %files
-requirements-docker.txt requirements.txt
+requirements-docker-original.txt requirements.txt
 %post
 
 apt-get update && \
