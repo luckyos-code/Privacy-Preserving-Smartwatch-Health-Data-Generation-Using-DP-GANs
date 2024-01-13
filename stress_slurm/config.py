@@ -21,38 +21,45 @@ def prepare_environment(random_seed: int = 42) -> None:
 
 GAN_CONFIG = {
     "noGAN": {
-                "gan_mode": "noGAN", 
+                "gan_mode": "noGAN",
+                "name": "WESAD",
                 "type": None,
                 "path": None,
                 "eps": None
             },
     "TIMEGAN": {
                 "gan_mode": "TIMEGAN", 
+                "name": "TimeGAN", 
                 "path": "stress_slurm/data/15_subj_timeGAN.npy",
                 "eps": None
             },
     "DGAN": {
                 "gan_mode": "DGAN", 
+                "name": "DGAN", 
                 "path": "stress_slurm/data/100_subj_DGAN.csv",
                 "eps": None
             },
     "CGAN": {
                 "gan_mode": "CGAN", 
+                "name": "CGAN", 
                 "path": "stress_slurm/data/100_subj_cGAN.csv",
                 "eps": None
             },
     "DPCGAN-e-10": {
                 "gan_mode": "DPCGAN-e-10", 
+                "name": "DP-CGAN \u03B5=10",
                 "path": "stress_slurm/data/100_subj_DP-cGAN-e-10.csv",
                 "eps": 10
             },
     "DPCGAN-e-1": {
-                "gan_mode": "DPCGAN-e-1", 
+                "gan_mode": "DPCGAN-e-1",
+                "name": "DP-CGAN \u03B5=1", 
                 "path": "stress_slurm/data/100_subj_DP-cGAN-e-1.csv",
                 "eps": 1
             },
     "DPCGAN-e-0.1": {
                 "gan_mode": "DPCGAN-e-0.1", 
+                "name": "DP-CGAN \u03B5=0.1",
                 "path": "stress_slurm/data/100_subj_DP-cGAN-e-0.1.csv",
                 "eps": 0.1
     },
