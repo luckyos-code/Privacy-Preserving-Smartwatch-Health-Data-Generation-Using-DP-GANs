@@ -4,9 +4,10 @@
   "sliding_windows": false,
   "syn_subj_cnt": 100,
   "gan_config": {
-    "gan_mode": "DPCGAN-e-1",
-    "path": "stress_slurm/data/100_subj_DP-cGAN-e-1.csv",
-    "eps": 1
+    "gan_mode": "DPCGAN-e-0.1",
+    "name": "DP-CGAN \u03b5=0.1",
+    "path": "stress_slurm/data/100_subj_DP-cGAN-e-0.1.csv",
+    "eps": 0.1
   },
   "privacy_config": {
     "l2_norm_clip": 1.0,

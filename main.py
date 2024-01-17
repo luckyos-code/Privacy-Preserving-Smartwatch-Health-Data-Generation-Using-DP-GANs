@@ -5,7 +5,7 @@ import itertools
 from run_experiment import ci_experiment
 from stress_slurm import config
 
-# fix annoying harmless warnings - sadly not working #TODO
+# fix annoying harmless warnings
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 
@@ -17,7 +17,7 @@ def check_create_folder(dir: str):
         print(f"Directory {check_dir} does not exist, creating it")
         os.makedirs(check_dir)
 
-def save_dict_as_json( #TODO make cool result dataframe and save this too
+def save_dict_as_json(
     data: dict,
     path: str,
     file_name: str = None
@@ -53,7 +53,7 @@ def scenario_run(scenario_id: int, saving: bool = False):
     run_name = ""
 
     # hardcoded options #TODO maybe put in config or derive from configs or something
-    num_ci_runs = 10 #TODO
+    num_ci_runs = 10
     models = ["CNN-LSTM", "CNN", "Transformer"]
     np_gan_models = ["TIMEGAN", "DGAN", "CGAN"]
     p_gan_models = ["CGAN", "DPCGAN-e-10", "DPCGAN-e-1", "DPCGAN-e-0.1"]
@@ -201,16 +201,15 @@ def scenario_run(scenario_id: int, saving: bool = False):
                 save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
             print("")
             
-    # 4 - LOSO - real data + priavte CGANs - best subj count - eps
+    # 4 - LOSO - real data + priavte CGANs - 100 subj count - eps
     elif scenario_id == 6:
         scenario_str = "LOSO_cGAN_priv"
         scenario_name = f"{scenario_id}-{scenario_str}"
         save_folder = base_save_folder + "/" + scenario_name
         print(f"***Running scenario {scenario_id}: {scenario_name}")
         
-        p_gan_tuples = [("CGAN", None), ("DPCGAN-e-10", 10.0), ("DPCGAN-e-1", 1.0), ("DPCGAN-e-0.1", 0.1)] # TODO
-        p_gan_tuples = [("DPCGAN-e-10", 10.0)]
-        syn_subjs = [100] # TODO
+        p_gan_tuples = [("CGAN", None), ("DPCGAN-e-10", 10.0), ("DPCGAN-e-1", 1.0), ("DPCGAN-e-0.1", 0.1)]
+        syn_subjs = [100]
         
         iter_lst = list(itertools.product(models, syn_subjs, p_gan_tuples))
         exp_num = len(iter_lst)
@@ -235,7 +234,103 @@ def scenario_run(scenario_id: int, saving: bool = False):
             if saving:
                 save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
             print("")
+            
+            
+    # 4 - LOSO - real data + priavte CGANs - 15 subj count - eps
+    # based on scenario 6
+    elif scenario_id == 7:
+        scenario_str = "LOSO_cGAN_priv15"
+        scenario_name = f"{scenario_id}-{scenario_str}"
+        save_folder = base_save_folder + "/" + scenario_name
+        print(f"***Running scenario {scenario_id}: {scenario_name}")
+        
+        p_gan_tuples = [("CGAN", None), ("DPCGAN-e-10", 10.0), ("DPCGAN-e-1", 1.0), ("DPCGAN-e-0.1", 0.1)]
+        syn_subjs = [15]
+        
+        iter_lst = list(itertools.product(models, syn_subjs, p_gan_tuples))
+        exp_num = len(iter_lst)
+        for i, (model, syn_subj_cnt, p_gan_tuple) in enumerate(iter_lst):
+            gan_mode = p_gan_tuple[0]
+            eps = p_gan_tuple[1]
+            
+            run_name = f"{model}_{scenario_str}_syn{syn_subj_cnt}"
+            run_name += "" if not eps else f"_eps{str(eps)}"
+            print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
+            run_dict = ci_experiment(
+                num_runs=num_ci_runs,
+                real_subj_cnt=15,
+                syn_subj_cnt=syn_subj_cnt,
+                gan_mode=gan_mode,
+                sliding_windows=False,
+                eval_mode="LOSO",
+                nn_mode=model,
+                eps=eps,
+                silent_runs=True
+            )
+            if saving:
+                save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
+            print("")
+            
+    # 4 - LOSO - DGAN - different subj counts - no eps
+    # based on scenario 4
+    elif scenario_id == 8:
+        scenario_str = "LOSO_DGAN"
+        scenario_name = f"{scenario_id}-{scenario_str}"
+        save_folder = base_save_folder + "/" + scenario_name
+        print(f"***Running scenario {scenario_id}: {scenario_name}")
+        
+        syn_subjs = [15, 100]
+        
+        iter_lst = list(itertools.product(models, syn_subjs))
+        exp_num = len(iter_lst)
+        for i, (model, syn_subj_cnt) in enumerate(iter_lst):
+            run_name = f"{model}_{scenario_str}_{syn_subj_cnt}"
+            print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
+            run_dict = ci_experiment(
+                num_runs=num_ci_runs,
+                real_subj_cnt=15,
+                syn_subj_cnt=syn_subj_cnt,
+                gan_mode="DGAN",
+                sliding_windows=False,
+                eval_mode="LOSO",
+                nn_mode=model,
+                eps=None,
+                silent_runs=True
+            )
+            if saving:
+                save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
+            print("")
+            
+    # 3 - TSTR - DGAN 100 - training no eps
+    # based on scenario 3
+    elif scenario_id == 9:
+        scenario_str = "TSTR_DGAN100"
+        scenario_name = f"{scenario_id}-{scenario_str}"
+        save_folder = base_save_folder + "/" + scenario_name
+        print(f"***Running scenario {scenario_id}: {scenario_name}")
+        
+        syn_subjs = [100]
 
+        iter_lst = list(itertools.product(models, syn_subjs))
+        exp_num = len(iter_lst)
+        for i, (model, syn_subj_cnt) in enumerate(iter_lst):
+            run_name = f"{model}_{scenario_str}_syn{syn_subj_cnt}"
+            print(f"**Starting experiment run ({i+1}/{exp_num}): {run_name}...")
+            run_dict = ci_experiment(
+                num_runs=num_ci_runs,
+                real_subj_cnt=15,
+                syn_subj_cnt=syn_subj_cnt,
+                gan_mode="DGAN",
+                sliding_windows=False,
+                eval_mode="TSTR",
+                nn_mode=model,
+                eps=None,
+                silent_runs=True
+            )
+            if saving:
+                save_dict_as_json(run_dict, path=save_folder, file_name=run_name)
+            print("")
+            
 # get inputs and run experiment with these settings
 def main():
     parser = config.create_arg_parse_instance()
