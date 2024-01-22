@@ -33,6 +33,9 @@ MODEL_DICT = {
     "DP-cGAN-e-0.1": "dp-cgan-e-0_1/light-sweep-1",
     "DP-cGAN-e-1": "dp-cgan-e-1/revived-sweep-2",
     "DP-cGAN-e-10": "dp-cgan-e-10/usual-sweep-3",
+
+    "new-10": "new_cgan/10",
+    "new-1": "new_cgan/1",
     
     "DGAN": "dgan",
     "cGAN-3er": "cgan3er",
