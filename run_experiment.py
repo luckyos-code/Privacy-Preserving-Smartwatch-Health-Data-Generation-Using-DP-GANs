@@ -4,8 +4,7 @@ import pandas as pd
 import seaborn as sns
 import tensorflow as tf
 
-import os
-import sys
+import os, sys, copy
 from contextlib import nullcontext
 from contextlib import contextmanager
 import time
@@ -38,23 +37,21 @@ def run(
     nn_mode: str = "CNN", # CNN or transformer
     eps: float = None,
     loaded_data: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = None,
+    data_noise_parameter: Optional[float] = None
+
 ) -> dict:
     gan_mode = gan_mode if syn_subj_cnt > 0 else "noGAN" # or any other gan name
 
     # check if cluster is in correct env
     assert(
-        pd.__version__ == "2.0.1"
-    ), f"got pandas {pd.__version__} but expected 2.0.1, probably means wrong cluster env"
-
-    # hide annoying messages
-    tf.get_logger().setLevel('ERROR')
+        pd.__version__ == "2.0.1" or pd.__version__ == "1.4.1"
+    ), f"got pandas {pd.__version__} but expected 2.0.1 or 1.4.1, probably means wrong cluster env"
 
     # look for cluster gpu
     print(tf.config.list_physical_devices('GPU'))
 
     config.prepare_environment()
 
-    # TODO scenario config
     run_config = {
         # real data
         "real_subj_cnt": real_subj_cnt, # max 15 wesad
@@ -66,7 +63,7 @@ def run(
         # privacy
         "privacy_config": {**(config.PRIVACY_CONFIG), **{"eps": eps, "num_unique_windows": None}},
         # training
-        "train_config": {**(config.TRAIN_CONFIG[nn_mode]), **{"eval_mode": eval_mode, "random_seed": config.RANDOM_SEED}},
+        "train_config": {**(config.TRAIN_CONFIG[nn_mode]), **{"eval_mode": eval_mode, "random_seed": config.RANDOM_SEED, "data_noise_parameter":data_noise_parameter}},
     }
 
     # realX and realY is nested subject-wise for LOSO training
@@ -104,6 +101,7 @@ def run(
         num_unique_windows=run_config["privacy_config"]["num_unique_windows"],
         l2_norm_clip=run_config["privacy_config"]["l2_norm_clip"],
         prepare_environment_func=config.prepare_environment,
+        data_noise_parameter=data_noise_parameter
     )
 
     return run_config
@@ -117,7 +115,8 @@ def ci_experiment(
     eval_mode: str = "LOSO",
     nn_mode: str = "CNN",
     eps: float = None,
-    silent_runs: bool = True
+    silent_runs: bool = True,
+    data_noise_parameter: Optional[float] = None
 ) -> dict:
     # load experiment data
     gan_mode = gan_mode if syn_subj_cnt > 0 else "noGAN" # or any other gan name
@@ -144,7 +143,8 @@ def ci_experiment(
                 eval_mode,
                 nn_mode,
                 eps,
-                loaded_data=(realX, realY, synX, synY)
+                loaded_data=(realX, realY, synX, synY),
+                data_noise_parameter=data_noise_parameter
             )
         run_configs_lst.append(single_run_config)
         end_time = time.monotonic()
@@ -156,22 +156,39 @@ def ci_experiment(
                                   orient='index',
                                   columns=["accuracy", "precision", "recall", "f1"]) for run_config in run_configs_lst]
     df = pd.concat(dfs, axis=0)
-    
-    print(df.groupby(df.index).describe())
 
-    # averages = df.mean(axis=0)
-    # print(f"***Subjects:\n{df}")
-    # print(f"***Averages:\n{averages}")
+    grp_df = df.groupby(df.index)
 
-    # results["average"] = {
-    #     "accuracy": averages[0],
-    #     "precision": averages[1],
-    #     "recall": averages[2],
-    #     "f1": averages[3],
-    # }
+    ci_run_config = copy.deepcopy(run_configs_lst[0])
+    ci_run_config.pop("results")
+    ci_run_config["results"] = {
+        "num_runs": num_runs,
+        "mean": {},
+        "std": {},
+        "poor_ratio": None
+    }
 
-    ci_run_config = {}
-    ci_run_config["num_runs"]= num_runs
-    # print like in single run
+    real_ids = run_configs_lst[0]["results"].keys()
+
+    # add mean and std
+    mean_df = grp_df.mean()
+    std_df = grp_df.std()
+    for key in real_ids:
+        ci_run_config["results"]["mean"][key] = mean_df.loc[key].to_dict()
+        ci_run_config["results"]["std"][key] = std_df.loc[key].to_dict()
+
+    # add poor_ratio for models with f1 <= 0.3, since target class stress is 0.3
+    cnt = 0
+    for run_config in run_configs_lst:
+        if run_config["results"]["average"]["f1"] <= 0.3:
+            cnt += 1
+    ci_run_config["results"]["poor_ratio"] = cnt / len(run_configs_lst)
+
+    # print ci results
+    print(f"***CI results:\n")
+    df = pd.DataFrame.from_dict(ci_run_config["results"]["mean"], orient='index', columns=["accuracy", "precision", "recall", "f1"])
+    print(df)
+    print(f"poor model ratio: {ci_run_config['results']['poor_ratio']}")
+
     return ci_run_config
 

@@ -13,15 +13,16 @@ import pandas as pd
 
 from stress_detector import constants
 from stress_detector.data.datatype import DataType
-from stress_detector.model import build_cnn, build_transformer
+from stress_detector.model import build_cnn, build_transformer, build_cnn_lstm
 
 import time
 from datetime import timedelta
 
-
 from tensorflow_privacy.privacy.analysis.compute_noise_from_budget_lib import compute_noise as tfp_computer_noise
 from tensorflow_privacy.privacy.analysis import compute_dp_sgd_privacy
 from tensorflow_privacy.privacy.optimizers.dp_optimizer_vectorized import VectorizedDPAdamOptimizer
+from tensorflow_privacy.privacy.optimizers.dp_optimizer_keras import DPKerasAdamOptimizer
+from tensorflow_privacy.privacy.optimizers.dp_optimizer_keras_vectorized import VectorizedDPKerasAdamOptimizer
 
 """
 Calculate Delta for given training dataset size n
@@ -39,24 +40,88 @@ Calculate noise for given training hyperparameters
 def compute_noise(n, batch_size, target_epsilon, epochs, delta, min_noise=1e-5):
     return tfp_computer_noise(n, batch_size, target_epsilon, epochs, delta, min_noise)
 
-# compute_dp_sgd_privacy.compute_dp_sgd_privacy(18900, #210*6*15 = 18900
-#                                               batch_size=params["batch_size"],
-#                                               noise_multiplier=params["noise_multiplier"],
-#                                               epochs=max(epochs_dict.values()), # siehe unten
-#                                               delta=1e-5)
+"""
+Add noise to data based on multiplier or epsilon
+
+Args:
+    data (np.ndarray): training data to noise, e.g. full WESAD shape should be of shape (15,) with underlying concatenated data of (530,6,210) over the 15 subjects.
+    target_epsilon (float): wanted epsilon replaces noise_multiplier arg, if given the noise is calculated assuming a machine learning task.
+    noise_multiplier (float): wanted noise_multipier if no target_epsilon given, directly states the wanted noise.
+    noise_type (str of "laplace" or "gaussian"): wanted noise distribution.
+    clip_max (bool): clipping to max of each signal for dp, if false clip to 1 as sensitity of similarity func.
+
+Returns:
+    tuple[np.ndarray, float, target_epsilon]: Windows with physiological measurements and corresponding labels.
+"""
+def create_noisy_data(data: np.ndarray,
+                      target_epsilon: float=None,
+                      noise_multiplier: float=None,
+                      noise_type: str="laplace",
+                      clip_max: bool=False):
+
+    if len(data.shape) == 1: # if data is saved per subject
+        points_per_subj = [subj.shape[0] for subj in data] # save number of data points belonging to each subject
+        data = np.concatenate(data) # flatten data to (n,6,210) for DP
+    else: points_per_subj = None
+
+    n = data.shape[0] # number of training samples
+    delta = compute_delta(n)
+    if target_epsilon:
+        noise_multiplier = compute_noise( # simulate one round of dp training to get aquivalent noise multiplier
+            n=n,
+            target_epsilon=target_epsilon,
+            delta=delta,
+            batch_size=n, # all data is evaluated at once and not in batches = sampling rate 100%
+            epochs=1 # all data is only evaluated in one query during attack = 1 step
+        )
+    else: # calculate assumed epsilon based on given noise
+        target_epsilon, _ = compute_dp_sgd_privacy.compute_dp_sgd_privacy(
+            n=n,
+            batch_size=n, # all data is evaluated at once and not in batches = sampling rate 100%
+            noise_multiplier=noise_multiplier,
+            epochs=1, # all data is only evaluated in one query during attack = 1 step
+            delta=delta
+        )
+
+    signal_splits = np.split(data, data.shape[1], axis=1) # per signal clipping preparation
+    
+    for idx, signal_data in enumerate(signal_splits):
+        clip = 1 if not clip_max else np.max(signal_data) # 1 as sensitity of similarity func or max of each signal as clip for DP
+
+        if noise_type == "laplace":
+            signal_splits[idx] = signal_data + np.random.laplace(scale=clip*noise_multiplier, size=signal_data.shape)
+        elif noise_type == "gaussian":
+            signal_splits[idx] = signal_data + np.random.normal(scale=clip*noise_multiplier, size=signal_data.shape)
+
+    noisy_data = np.concatenate(signal_splits, axis=1)
+
+    if points_per_subj: # reverse flattening back to subject-based array
+        noisy_data = np.asarray([noisy_data[:idx] for idx in points_per_subj], dtype=object)
+
+    return noisy_data, noise_multiplier, target_epsilon
 
 def build_model(nn_mode, num_signals, num_output_class) -> tf.keras.Model:
     if nn_mode == "CNN":
         model = build_cnn(num_signals, num_output_class)
     elif nn_mode == "Transformer":
         model = model = build_transformer(num_signals, num_output_class)
+    elif nn_mode == "CNN-LSTM":
+        model = build_cnn_lstm(num_signals, num_output_class)
+    else:
+        raise Exception("not a valid model selection")
     return model
 
 def compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epochs, l2_norm_clip) -> Tuple[tf.keras.Model, float, float]:
     if not eps:
         optimizer = Adam(learning_rate=learning_rate)
+        loss = "binary_crossentropy"
         delta, noise_multiplier = None, None
     else:
+        # check if cluster is in correct env
+        assert(
+            tf.__version__ == "2.7.1"
+        ), f"got tf {tf.__version__} but expected 2.7.1 for tf privacy"
+        
         # calculate relevant training sample number
         delta = compute_delta(num_unique_windows)
         noise_multiplier = compute_noise(
@@ -65,24 +130,28 @@ def compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epo
             target_epsilon=eps,
             epochs=epochs,
             delta=delta)
-        optimizer = VectorizedDPAdamOptimizer(
+        optimizer = VectorizedDPKerasAdamOptimizer(
             l2_norm_clip=l2_norm_clip,
             noise_multiplier=noise_multiplier,
-            num_microbatches=batch_size,
+            num_microbatches=1, #TODO fix because batch_size gives error
             learning_rate=learning_rate
         )
-
+        loss = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction=tf.losses.Reduction.NONE)
+    
     model.compile(
         optimizer=optimizer,
-        loss="binary_crossentropy",
+        loss=loss,
         metrics=['accuracy', Precision(), Recall()],
     )
     return model, delta, noise_multiplier
 
 def train_model(model, X_train, Y_train, epochs, batch_size, class_weight=True, validation_split=None, verbose=2) -> Tuple[tf.keras.Model, dict]:
     if class_weight: 
-        class_weight = {0: 1,
-                        1: (np.argmax(Y_train, axis=1).tolist().count(0) / np.argmax(Y_train, axis=1).tolist().count(1)),}
+        if not (np.argmax(Y_train, axis=1).tolist().count(1)): # time gan generates only one class (non-stress)
+            class_weight = None
+        else:
+            class_weight = {0: 1,
+                            1: (np.argmax(Y_train, axis=1).tolist().count(0) / np.argmax(Y_train, axis=1).tolist().count(1)),}
 
     history = model.fit(
         X_train,
@@ -124,6 +193,7 @@ def train(
     num_unique_windows: int = None,
     l2_norm_clip: float = 1.0,
     prepare_environment_func: Optional[Callable] = None,
+    data_noise_parameter: Optional[float] = None
 ) -> Tuple[dict, float, float]:
     assert(
         num_output_class == 2
@@ -166,6 +236,8 @@ def train(
 
             # add synthetic subjects
             if syn_subj_cnt > 0:
+                #if eps: # TODO
+                #    raise Exception("private training for LOSO with syn data augmentation not implemented yet")
                 X_train = np.concatenate((X_train, synX)) # inside parenthesis because matrice-like structure
                 Y_train = np.concatenate((Y_train, synY))
 
@@ -178,9 +250,14 @@ def train(
 
             if prepare_environment_func: prepare_environment_func()
 
+            if data_noise_parameter: 
+                old_sample = X_train[0][0]
+                X_train, _, noised_eps = create_noisy_data(X_train, noise_multiplier=data_noise_parameter, clip_max=False)
+                print(f"\nExcerpt of change in data through noise:\n{old_sample-X_train[0][0]}")
+
             model = build_model(nn_mode, num_signals, num_output_class)
             model, delta, noise_multiplier = compile_model(model, learning_rate, eps, num_unique_windows, batch_size, epochs, l2_norm_clip)
-            model, history = train_model(model, X_train, Y_train, epochs, batch_size, validation_split=None, verbose=2)
+            model, history = train_model(model, X_train, Y_train, epochs, batch_size, gan_mode, validation_split=None, verbose=2)
             results[real_ids[test_idx]] = evaluate_model(model, X_test, Y_test)
 
             end_time = time.monotonic()
@@ -206,7 +283,8 @@ def train(
 
         model = build_model(nn_mode, num_signals, num_output_class)
 
-        if eps:
+        if eps and False: # TODO
+            raise Exception("private training for tstr gan not implemented yet")
             gan_num_unique_windows = 545
             if gan_mode == "CGAN":
                 # epochs from GAN times 2 because of sliding windows doubling appearance of each sample
@@ -222,6 +300,7 @@ def train(
                 raise Exception("not a valid gan_mode")
         else: gan_num_unique_windows, gan_epochs = None, None
 
+        #todo validation split
         model, delta, noise_multiplier = compile_model(model, learning_rate, eps, gan_num_unique_windows, batch_size, gan_epochs, l2_norm_clip)
         model, history = train_model(model, X_train, Y_train, epochs, batch_size, validation_split=None, verbose=2)
         

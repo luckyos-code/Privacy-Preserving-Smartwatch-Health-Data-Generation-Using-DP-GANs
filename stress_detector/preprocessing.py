@@ -358,7 +358,7 @@ def load_data(
             # load from saved numpy array
             if gan_mode == "TIMEGAN":
                 assert (
-                    syn_subj_cnt <= 15
+                    syn_subj_cnt <= 30
                 ), "for timeGAN syn_subj_cnt cannot be larger than 30"
 
                 with open(syn_path, "rb") as f:
