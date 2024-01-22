@@ -1,3 +1,6 @@
+stress_slurm/*.sif
+slurm_out/
+.keras/
 
 data_thesis/
 models_thesis/

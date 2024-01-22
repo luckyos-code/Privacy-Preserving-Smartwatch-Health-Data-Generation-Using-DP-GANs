@@ -127,7 +127,7 @@ class Subject:
             inplace=True,
         )
         subject_data["label"] = subject_data["label"].replace(
-            [1.0, 2.0, 3.0], [0, 1, 0]
+            [1.0, 2.0, 3.0], [0, 1, 2]
         )
         subject_data.reset_index(drop=True, inplace=True)
 
