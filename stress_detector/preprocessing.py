@@ -9,6 +9,8 @@ from stress_detector.data.datatype import DataType
 from synthesizers.preprocessing.wesad import WESADDataset
 from synthesizers.utils.preprocessing import get_max_value_from_list, most_common
 
+import matplotlib.pyplot as plt
+
 from . import constants
 
 # 1. Creating the windows
@@ -133,7 +135,7 @@ def create_subwindows(
     return subwindows
 
 
-def fft_subwindows(subwindows: list, duration: int, fs: int) -> list:
+def fft_subwindows(subwindows: list, duration: int, fs: int, sort_amps: bool = True) -> [list, list]:
     """Calculates the fft of the subwindows.
 
     Args:
@@ -158,9 +160,10 @@ def fft_subwindows(subwindows: list, duration: int, fs: int) -> list:
         freq = np.abs(freq[0:l])
 
         # Sort descending amp
-        p = amps.argsort()[::-1]
-        freq = freq[p]
-        amps = amps[p]
+        if sort_amps:
+            p = amps.argsort()[::-1]
+            freq = freq[p]
+            amps = amps[p]
 
         freqs.append(freq)
         yfs.append(amps)
@@ -201,7 +204,40 @@ def average_window(subwindows_fft: list) -> list:
     return avg_yfs
 
 
-def create_training_data_per_subject(fs, windows):
+def plot_fft(freqs, amps, save_file=None):
+    """Plot the FFT frequency and amplitude."""
+    plt.style.use('default')
+    plt.rc('font', size=14)         # controls default text sizes
+    plt.rc('axes', titlesize=14)    # fontsize of the axes title
+    plt.rc('axes', labelsize=14)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=16)   # fontsize of the tick labels
+    plt.rc('ytick', labelsize=16)   # fontsize of the tick labels
+    plt.rc('legend', fontsize=18)   # legend fontsize
+    plt.rc('figure', titlesize=24)  # fontsize of the figure title
+    
+    plt.figure(figsize=(6, 4))
+    if np.array(freqs).ndim > 1:
+        for freq, amp in zip(freqs, amps):
+            plt.plot(freq, amp)
+    else: plt.plot(freqs, amps)
+    #plt.title('FFT Spectrum')
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Amplitude (Log Scale)')
+    plt.yscale('log')  # Set the y-axis to a logarithmic scale
+    plt.grid(False)
+    
+    ## if fig should be saved:
+    if False:
+        RESULTS_PATH = ".../stress_slurm/results/plots/data_quality"
+        if np.array(freqs).ndim > 1:
+            plt.savefig(f"{RESULTS_PATH}/fft_spectrum_subwindows.pdf", format="pdf", bbox_inches="tight")
+        else:
+            plt.savefig(f"{RESULTS_PATH}/fft_spectrum_average.pdf", format="pdf", bbox_inches="tight")
+
+    plt.show()
+    
+
+def create_training_data_per_subject(fs, windows, sort_amps=True):
     X = []
     for i in range(0, len(windows) - 1):
         yfs_averages = []
@@ -213,16 +249,22 @@ def create_training_data_per_subject(fs, windows):
                 signal_name=signal,
                 fs=fs,
             )
-            _, yfs = fft_subwindows(subwindows, duration_in_sec, fs=fs)
+            freqs, yfs = fft_subwindows(subwindows, duration_in_sec, fs=fs, sort_amps=sort_amps)
+            
             padded_yfs = pad_along_axis(yfs, target_length=210, axis=1)
-            yfs_averages.append(average_window(padded_yfs)[:210])
+            padded_avg_yfs = average_window(padded_yfs)[:210]
+            yfs_averages.append(padded_avg_yfs)
+
+            if not(sort_amps) and i == 0 and j == 0:  # Adjust this condition to plot for different windows or signals
+                plot_fft(freqs, yfs)  # Plot the FFT of the subwindows
+                plot_fft(freqs[0][:210], yfs_averages[0])  # Plot the FFT of the average window
 
         X.append(yfs_averages)
     return np.array(X)
 
 
 def create_preprocessed_subjects_data(
-    subjects_data: dict, fs: int = 64, use_sliding_windows: bool = False
+    subjects_data: dict, fs: int = 64, use_sliding_windows: bool = False, sort_amps: bool = True
 ) -> dict:
     # Creates averaged windows for all subjects from dataframes
 
@@ -234,7 +276,7 @@ def create_preprocessed_subjects_data(
         else:
             windows, labels = create_windows(subject_df, fs=fs)
 
-        X = create_training_data_per_subject(fs, windows)
+        X = create_training_data_per_subject(fs, windows, sort_amps=sort_amps)
         y = np.array((labels[: len(windows) - 1]))
 
         subjects_preprosessed_data[subject_name]["X"] = X
@@ -243,7 +285,7 @@ def create_preprocessed_subjects_data(
     return subjects_preprosessed_data
 
 
-def create_training_data_per_subject_gen(fs, windows):
+def create_training_data_per_subject_gen(fs, windows, sort_amps=True):
     X = []
     for i in range(0, len(windows) - 1):
         yfs_averages = []
@@ -255,7 +297,7 @@ def create_training_data_per_subject_gen(fs, windows):
                 signal_name=signal,
                 fs=fs,
             )
-            _, yfs = fft_subwindows(subwindows, duration_in_sec, fs=fs)
+            _, yfs = fft_subwindows(subwindows, duration_in_sec, fs=fs, sort_amps=sort_amps)
 
             padded_yfs = pad_along_axis(yfs, target_length=210, axis=1)
             yfs_averages.append(average_window(padded_yfs)[:210])
@@ -264,10 +306,10 @@ def create_training_data_per_subject_gen(fs, windows):
     return np.array(X)
 
 
-def create_preprocessed_subjects_data_gen(windows: np.array, fs: int = 1) -> Tuple:
+def create_preprocessed_subjects_data_gen(windows: np.array, fs: int = 1, sort_amps: bool = True) -> Tuple:
     # Creates averaged windows for all subjects from dataframes
     # print("Windows Shape: ", windows.shape)
-    X = create_training_data_per_subject_gen(fs, windows)
+    X = create_training_data_per_subject_gen(fs, windows, sort_amps=sort_amps)
     y = windows[:, 0, 6][: len(X)]
 
     return np.array(X), np.array(y)
@@ -299,6 +341,7 @@ def load_data(
     gan_mode: str,
     use_sliding_windows: bool = False,
     sampling_rate: int = 1,
+    no_fft_plot: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Load preprocessed data from disk or create it from scratch.
@@ -327,7 +370,7 @@ def load_data(
 
     realX, realY = np.array([]), np.array([])
     synX, synY = np.array([]), np.array([])
-
+    
     if real_subj_cnt > 0:
         assert (
             real_subj_cnt <= 15
@@ -341,7 +384,7 @@ def load_data(
                 real_data = dict(list(real_data.items())[:real_subj_cnt])
 
             subjects_preprocessed_data = create_preprocessed_subjects_data(
-                real_data, fs=sampling_rate, use_sliding_windows=use_sliding_windows
+                real_data, fs=sampling_rate, use_sliding_windows=use_sliding_windows, sort_amps=no_fft_plot
             )
 
             realX, realY = get_subject_window_data(subjects_preprocessed_data)
@@ -374,7 +417,7 @@ def load_data(
                 syn_data = syn_df.to_numpy()
                 syn_data = syn_data.reshape(-1, 60, syn_data.shape[-1])
             
-            synX, synY = create_preprocessed_subjects_data_gen(syn_data, fs=1)
+            synX, synY = create_preprocessed_subjects_data_gen(syn_data, fs=1, sort_amps=no_fft_plot)
         except FileNotFoundError:
             raise FileNotFoundError(f"*** Error: synthetic data file not found at: {syn_path} ***")
 

@@ -153,7 +153,7 @@ def create_arg_parse_instance() -> ArgumentParser:
     parser.add_argument(
         "--saving",
         help=
-        "Set this flag if sliding windows should be used for real data.",
+        "Set this flag if results should be saved to files in results folder.",
         action="store_true"
     )
     parser.add_argument(
