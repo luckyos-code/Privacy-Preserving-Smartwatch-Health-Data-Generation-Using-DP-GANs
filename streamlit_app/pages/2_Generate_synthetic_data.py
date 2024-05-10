@@ -199,7 +199,7 @@ def download_dataframe_zipped(subjs: np.ndarray, model_name: str) -> None:
 
     zip_buffer = io.BytesIO()
 
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED, False) as zip_file:
+    with zipfile.ZipFile(zip_buffer, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as zip_file:
         for file_name, data in subjs_csv:
             zip_file.writestr(file_name, data.decode("utf-8"))  # Add each CSV to the zip
 
