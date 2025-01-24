@@ -1,4 +1,4 @@
-# Privacy-Preserving Smartwatch Health Data Generation For Stress Detection Using GANs
+# Generating Synthetic Health Sensor Data for Privacy-Preserving Wearable Stress Detection 
 
 This repository contains the code and documentation for a research project on generating synthetic smartwatch health data while preserving the privacy of the original data owners. The project uses a combination of differential privacy and generative adversarial networks (DP-GANs) to create synthetic data that closely resembles the original data in terms of statistical properties and data distributions.
 
